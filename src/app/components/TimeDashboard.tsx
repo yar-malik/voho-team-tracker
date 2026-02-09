@@ -124,6 +124,14 @@ type TeamRankingRow = {
   longestBreakSeconds: number;
 };
 
+type EntryModalData = {
+  memberName: string;
+  description: string;
+  project: string;
+  start: string | null;
+  end: string | null;
+};
+
 function buildTimelineBlocks(entries: TimeEntry[], dateInput: string) {
   const { start, end } = getDayBoundsMs(dateInput);
   const pxPerMs = HOUR_HEIGHT / (60 * 60 * 1000);
@@ -219,6 +227,19 @@ function buildTeamRanking(members: TeamMemberData[]): TeamRankingRow[] {
   });
 }
 
+function formatDateTime(iso: string | null): string {
+  if (!iso) return "—";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleString([], {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function buildSummary(entries: TimeEntry[]) {
   const totals = new Map<string, number>();
   entries.forEach((entry) => {
@@ -243,6 +264,7 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
   const [error, setError] = useState<string | null>(null);
   const [retryAfter, setRetryAfter] = useState<string | null>(null);
   const [mode, setMode] = useState<"member" | "team">("member");
+  const [selectedEntry, setSelectedEntry] = useState<EntryModalData | null>(null);
 
   const hasMembers = members.length > 0;
 
@@ -360,6 +382,24 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
     if (!teamData) return [] as TeamRankingRow[];
     return buildTeamRanking(teamData.members);
   }, [teamData]);
+
+  const teamTimeline = useMemo(() => {
+    if (!teamData) return [] as Array<{ name: string; blocks: TimelineBlock[]; maxLanes: number }>;
+    return teamData.members.map((memberData) => ({
+      name: memberData.name,
+      ...buildTimelineBlocks(memberData.entries, date),
+    }));
+  }, [teamData, date]);
+
+  const openEntryModal = (entry: TimeEntry, memberName: string) => {
+    setSelectedEntry({
+      memberName,
+      description: entry.description?.trim() || "(No description)",
+      project: entry.project_name?.trim() || "No project",
+      start: entry.start,
+      end: entry.stop,
+    });
+  };
 
   const handleSaveFilter = () => {
     if (!member) return;
@@ -568,9 +608,12 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
                         />
                       ))}
 
-                      {timeline.blocks.map((block) => (
-                        <article
+                      {timeline.blocks.map((block) => {
+                        const sourceEntry = data.entries.find((entry) => `${entry.id}-${new Date(entry.start).getTime()}` === block.id);
+                        return (
+                        <button
                           key={block.id}
+                          type="button"
                           className="absolute overflow-hidden rounded-lg border border-sky-300 bg-sky-100/90 px-2 py-1 shadow-sm"
                           style={{
                             top: `${block.topPx}px`,
@@ -578,13 +621,18 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
                             left: `calc(${(block.lane / timeline.maxLanes) * 100}% + 0.25rem)`,
                             width: `calc(${100 / timeline.maxLanes}% - 0.5rem)`,
                           }}
+                          onClick={() => {
+                            if (!sourceEntry) return;
+                            openEntryModal(sourceEntry, member);
+                          }}
                         >
                           <p className="truncate text-xs font-semibold text-slate-900">{block.title}</p>
                           <p className="truncate text-[11px] text-slate-700">Project: {block.project}</p>
                           <p className="truncate text-[11px] text-slate-600">{block.timeRange}</p>
                           <p className="truncate text-[11px] text-slate-600">{block.durationLabel}</p>
-                        </article>
-                      ))}
+                        </button>
+                      );
+                      })}
                     </div>
                   </div>
                 </div>
@@ -692,6 +740,79 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
             </div>
           </div>
 
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="text-lg font-semibold text-slate-900">Team day calendar</h2>
+            <p className="text-sm text-slate-500">
+              One shared daily timeline for everyone. Matching vertical positions indicate overlap.
+            </p>
+            <div className="mt-4 overflow-x-auto">
+              <div className="grid min-w-[950px] grid-cols-[4.5rem_1fr] gap-3">
+                <div className="relative" style={{ height: `${HOURS_IN_DAY * HOUR_HEIGHT}px` }}>
+                  {Array.from({ length: HOURS_IN_DAY + 1 }).map((_, hour) => (
+                    <div
+                      key={hour}
+                      className="absolute right-0 pr-2 text-[11px] font-medium text-slate-400"
+                      style={{ top: `${hour * HOUR_HEIGHT - 8}px` }}
+                    >
+                      {formatHourLabel(hour % 24)}
+                    </div>
+                  ))}
+                </div>
+
+                <div
+                  className="grid gap-3"
+                  style={{ gridTemplateColumns: `repeat(${Math.max(1, teamTimeline.length)}, minmax(180px, 1fr))` }}
+                >
+                  {teamTimeline.map((memberTimeline) => (
+                    <div key={memberTimeline.name} className="space-y-2">
+                      <p className="text-sm font-semibold text-slate-700">{memberTimeline.name}</p>
+                      <div
+                        className="relative rounded-xl border border-slate-200 bg-slate-50"
+                        style={{ height: `${HOURS_IN_DAY * HOUR_HEIGHT}px` }}
+                      >
+                        {Array.from({ length: HOURS_IN_DAY + 1 }).map((_, hour) => (
+                          <div
+                            key={hour}
+                            className="absolute left-0 right-0 border-t border-slate-200/90"
+                            style={{ top: `${hour * HOUR_HEIGHT}px` }}
+                          />
+                        ))}
+
+                        {memberTimeline.blocks.map((block) => {
+                          const sourceEntry = teamData.members
+                            .find((item) => item.name === memberTimeline.name)
+                            ?.entries.find(
+                              (entry) => `${entry.id}-${new Date(entry.start).getTime()}` === block.id
+                            );
+                          return (
+                            <button
+                              key={block.id}
+                              type="button"
+                              className="absolute overflow-hidden rounded-lg border border-cyan-300 bg-cyan-100/90 px-2 py-1 text-left shadow-sm"
+                              style={{
+                                top: `${block.topPx}px`,
+                                height: `${block.heightPx}px`,
+                                left: `calc(${(block.lane / memberTimeline.maxLanes) * 100}% + 0.25rem)`,
+                                width: `calc(${100 / memberTimeline.maxLanes}% - 0.5rem)`,
+                              }}
+                              onClick={() => {
+                                if (!sourceEntry) return;
+                                openEntryModal(sourceEntry, memberTimeline.name);
+                              }}
+                            >
+                              <p className="truncate text-xs font-semibold text-slate-900">{block.title}</p>
+                              <p className="truncate text-[11px] text-slate-700">{block.timeRange}</p>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {teamData.members.map((memberData) => {
               const running = memberData.current && memberData.current.duration < 0 ? memberData.current : null;
@@ -732,6 +853,49 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
                 </div>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {selectedEntry && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-4"
+          onClick={() => setSelectedEntry(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-500">Entry details</p>
+                <h3 className="text-lg font-semibold text-slate-900">{selectedEntry.memberName}</h3>
+              </div>
+              <button
+                type="button"
+                className="rounded-full border border-slate-200 px-3 py-1 text-sm text-slate-600"
+                onClick={() => setSelectedEntry(null)}
+              >
+                x
+              </button>
+            </div>
+            <div className="mt-4 space-y-2 text-sm text-slate-700">
+              <p>
+                <span className="font-semibold text-slate-900">Description:</span>{" "}
+                {selectedEntry.description}
+              </p>
+              <p>
+                <span className="font-semibold text-slate-900">Project:</span> {selectedEntry.project}
+              </p>
+              <p>
+                <span className="font-semibold text-slate-900">Start:</span>{" "}
+                {formatDateTime(selectedEntry.start)}
+              </p>
+              <p>
+                <span className="font-semibold text-slate-900">End:</span>{" "}
+                {selectedEntry.end ? formatDateTime(selectedEntry.end) : "Running"}
+              </p>
+            </div>
           </div>
         </div>
       )}
