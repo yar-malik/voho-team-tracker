@@ -12,6 +12,8 @@ export type TogglTimeEntry = {
   stop: string | null;
   duration: number;
   project_id?: number | null;
+  workspace_id?: number | null;
+  wid?: number | null;
   tags?: string[] | null;
 };
 
@@ -92,4 +94,74 @@ export async function fetchCurrentEntry(token: string) {
   }
 
   return (await response.json()) as TogglTimeEntry | null;
+}
+
+function getWorkspaceId(entry: Pick<TogglTimeEntry, "workspace_id" | "wid">): number | null {
+  if (typeof entry.workspace_id === "number") return entry.workspace_id;
+  if (typeof entry.wid === "number") return entry.wid;
+  return null;
+}
+
+function projectKey(workspaceId: number, projectId: number): string {
+  return `${workspaceId}:${projectId}`;
+}
+
+export async function fetchProjectNames(
+  token: string,
+  entries: Array<Pick<TogglTimeEntry, "project_id" | "workspace_id" | "wid">>
+) {
+  const projectMap = new Map<string, string>();
+  const uniqueProjects = new Map<string, { workspaceId: number; projectId: number }>();
+
+  for (const entry of entries) {
+    if (typeof entry.project_id !== "number") continue;
+    const workspaceId = getWorkspaceId(entry);
+    if (workspaceId === null) continue;
+    const key = projectKey(workspaceId, entry.project_id);
+    if (!uniqueProjects.has(key)) {
+      uniqueProjects.set(key, { workspaceId, projectId: entry.project_id });
+    }
+  }
+
+  await Promise.all(
+    Array.from(uniqueProjects.values()).map(async ({ workspaceId, projectId }) => {
+      const url = `${TOGGL_API_BASE}/workspaces/${workspaceId}/projects/${projectId}`;
+      const response = await fetch(url, {
+        headers: {
+          Authorization: authHeader(token),
+          "Content-Type": "application/json",
+        },
+        cache: "no-store",
+      });
+
+      if (!response.ok) return;
+      const payload = (await response.json()) as { name?: unknown };
+      if (typeof payload.name === "string" && payload.name.trim().length > 0) {
+        projectMap.set(projectKey(workspaceId, projectId), payload.name.trim());
+      }
+    })
+  );
+
+  return projectMap;
+}
+
+export function getEntryProjectName(
+  entry: Pick<TogglTimeEntry, "project_id" | "workspace_id" | "wid">,
+  projectNames: Map<string, string>
+) {
+  if (typeof entry.project_id !== "number") return null;
+  const workspaceId = getWorkspaceId(entry);
+  if (workspaceId === null) return null;
+  return projectNames.get(projectKey(workspaceId, entry.project_id)) ?? null;
+}
+
+export function sortEntriesByStart(entries: TogglTimeEntry[]) {
+  return [...entries].sort((a, b) => {
+    const aTime = new Date(a.start).getTime();
+    const bTime = new Date(b.start).getTime();
+    if (Number.isNaN(aTime) && Number.isNaN(bTime)) return 0;
+    if (Number.isNaN(aTime)) return 1;
+    if (Number.isNaN(bTime)) return -1;
+    return aTime - bTime;
+  });
 }

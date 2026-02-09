@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fetchCurrentEntry, fetchTimeEntries, getTokenForMember } from "@/lib/toggl";
+import {
+  fetchCurrentEntry,
+  fetchProjectNames,
+  fetchTimeEntries,
+  getEntryProjectName,
+  getTokenForMember,
+  sortEntriesByStart,
+} from "@/lib/toggl";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const CACHE_TTL_MS = 30 * 1000;
@@ -7,8 +14,8 @@ const CACHE_TTL_MS = 30 * 1000;
 type CacheEntry = {
   expiresAt: number;
   payload: {
-    entries: Awaited<ReturnType<typeof fetchTimeEntries>>;
-    current: Awaited<ReturnType<typeof fetchCurrentEntry>>;
+    entries: Array<Awaited<ReturnType<typeof fetchTimeEntries>>[number] & { project_name?: string | null }>;
+    current: (Awaited<ReturnType<typeof fetchCurrentEntry>> & { project_name?: string | null }) | null;
     totalSeconds: number;
     date: string;
   };
@@ -63,8 +70,19 @@ export async function GET(request: NextRequest) {
       fetchTimeEntries(token, startDate, endDate),
       fetchCurrentEntry(token),
     ]);
+    const projectNames = await fetchProjectNames(token, current ? [...entries, current] : entries);
+    const sortedEntries = sortEntriesByStart(entries).map((entry) => ({
+      ...entry,
+      project_name: getEntryProjectName(entry, projectNames),
+    }));
+    const enrichedCurrent = current
+      ? {
+          ...current,
+          project_name: getEntryProjectName(current, projectNames),
+        }
+      : null;
 
-    const totalSeconds = entries.reduce((acc, entry) => {
+    const totalSeconds = sortedEntries.reduce((acc, entry) => {
       if (entry.duration >= 0) return acc + entry.duration;
       const startedAt = new Date(entry.start).getTime();
       if (Number.isNaN(startedAt)) return acc;
@@ -72,7 +90,7 @@ export async function GET(request: NextRequest) {
       return acc + runningSeconds;
     }, 0);
 
-    const payload = { entries, current, totalSeconds, date: dateInput };
+    const payload = { entries: sortedEntries, current: enrichedCurrent, totalSeconds, date: dateInput };
     setCached(cacheKey, payload);
     return NextResponse.json(payload);
   } catch (error) {
