@@ -9,7 +9,7 @@ import {
 } from "@/lib/toggl";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const CACHE_TTL_MS = 30 * 1000;
+const CACHE_TTL_MS = 5 * 60 * 1000;
 
 type CacheEntry = {
   expiresAt: number;
@@ -18,6 +18,8 @@ type CacheEntry = {
     current: (Awaited<ReturnType<typeof fetchCurrentEntry>> & { project_name?: string | null }) | null;
     totalSeconds: number;
     date: string;
+    quotaRemaining?: string | null;
+    quotaResetsIn?: string | null;
   };
 };
 
@@ -59,6 +61,7 @@ export async function GET(request: NextRequest) {
   const startDate = `${dateInput}T00:00:00Z`;
   const endDate = `${dateInput}T23:59:59Z`;
   const cacheKey = `${member.toLowerCase()}::${dateInput}`;
+  const isTodayUtc = dateInput === new Date().toISOString().slice(0, 10);
 
   const cached = getCached(cacheKey);
   if (cached) {
@@ -68,7 +71,7 @@ export async function GET(request: NextRequest) {
   try {
     const [entries, current] = await Promise.all([
       fetchTimeEntries(token, startDate, endDate),
-      fetchCurrentEntry(token),
+      isTodayUtc ? fetchCurrentEntry(token) : Promise.resolve(null),
     ]);
     const projectNames = await fetchProjectNames(token, current ? [...entries, current] : entries);
     const sortedEntries = sortEntriesByStart(entries).map((entry) => ({
@@ -97,10 +100,23 @@ export async function GET(request: NextRequest) {
     const message = error instanceof Error ? error.message : "Unknown error";
     const status = (error as Error & { status?: number }).status ?? 502;
     const retryAfter = (error as Error & { retryAfter?: string | null }).retryAfter ?? null;
+    const quotaRemaining = (error as Error & { quotaRemaining?: string | null }).quotaRemaining ?? null;
+    const quotaResetsIn = (error as Error & { quotaResetsIn?: string | null }).quotaResetsIn ?? null;
+
+    if (status === 402) {
+      return NextResponse.json(
+        {
+          error: "Toggl API quota reached. Please wait for reset before retrying.",
+          quotaRemaining,
+          quotaResetsIn,
+        },
+        { status: 402, headers: quotaResetsIn ? { "X-Toggl-Quota-Resets-In": quotaResetsIn } : undefined }
+      );
+    }
 
     if (status === 429) {
       return NextResponse.json(
-        { error: "Rate limited by Toggl. Please retry shortly.", retryAfter },
+        { error: "Rate limited by Toggl. Please retry shortly.", retryAfter, quotaRemaining, quotaResetsIn },
         { status: 429, headers: retryAfter ? { "Retry-After": retryAfter } : undefined }
       );
     }

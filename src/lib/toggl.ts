@@ -18,6 +18,15 @@ export type TogglTimeEntry = {
 };
 
 const TOGGL_API_BASE = "https://api.track.toggl.com/api/v9";
+const PROJECT_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
+
+type ProjectCacheValue = {
+  name: string;
+  expiresAt: number;
+};
+
+const projectNameCache = new Map<string, ProjectCacheValue>();
+const projectFetchInflight = new Map<string, Promise<string | null>>();
 
 function parseTeamEnv(): TeamMember[] {
   const raw = process.env.TOGGL_TEAM;
@@ -51,6 +60,35 @@ function authHeader(token: string): string {
   return `Basic ${basic}`;
 }
 
+function createApiError(response: Response, label: string): Error & {
+  status?: number;
+  retryAfter?: string | null;
+  quotaRemaining?: string | null;
+  quotaResetsIn?: string | null;
+} {
+  const error = new Error(`${label} (${response.status})`) as Error & {
+    status?: number;
+    retryAfter?: string | null;
+    quotaRemaining?: string | null;
+    quotaResetsIn?: string | null;
+  };
+  error.status = response.status;
+  error.retryAfter = response.headers.get("Retry-After");
+  error.quotaRemaining = response.headers.get("X-Toggl-Quota-Remaining");
+  error.quotaResetsIn = response.headers.get("X-Toggl-Quota-Resets-In");
+  return error;
+}
+
+function readProjectCache(key: string): string | null {
+  const cached = projectNameCache.get(key);
+  if (!cached) return null;
+  if (Date.now() > cached.expiresAt) {
+    projectNameCache.delete(key);
+    return null;
+  }
+  return cached.name;
+}
+
 export async function fetchTimeEntries(token: string, startDate: string, endDate: string) {
   const url = new URL(`${TOGGL_API_BASE}/me/time_entries`);
   url.searchParams.set("start_date", startDate);
@@ -65,11 +103,7 @@ export async function fetchTimeEntries(token: string, startDate: string, endDate
   });
 
   if (!response.ok) {
-    const error = new Error(`Toggl request failed (${response.status})`);
-    (error as Error & { status?: number; retryAfter?: string | null }).status = response.status;
-    (error as Error & { status?: number; retryAfter?: string | null }).retryAfter =
-      response.headers.get("Retry-After");
-    throw error;
+    throw createApiError(response, "Toggl request failed");
   }
 
   return (await response.json()) as TogglTimeEntry[];
@@ -86,11 +120,7 @@ export async function fetchCurrentEntry(token: string) {
   });
 
   if (!response.ok) {
-    const error = new Error(`Toggl current entry failed (${response.status})`);
-    (error as Error & { status?: number; retryAfter?: string | null }).status = response.status;
-    (error as Error & { status?: number; retryAfter?: string | null }).retryAfter =
-      response.headers.get("Retry-After");
-    throw error;
+    throw createApiError(response, "Toggl current entry failed");
   }
 
   return (await response.json()) as TogglTimeEntry | null;
@@ -123,21 +153,54 @@ export async function fetchProjectNames(
     }
   }
 
+  for (const key of uniqueProjects.keys()) {
+    const cached = readProjectCache(key);
+    if (cached) {
+      projectMap.set(key, cached);
+      uniqueProjects.delete(key);
+    }
+  }
+
   await Promise.all(
     Array.from(uniqueProjects.values()).map(async ({ workspaceId, projectId }) => {
-      const url = `${TOGGL_API_BASE}/workspaces/${workspaceId}/projects/${projectId}`;
-      const response = await fetch(url, {
-        headers: {
-          Authorization: authHeader(token),
-          "Content-Type": "application/json",
-        },
-        cache: "no-store",
-      });
+      const key = projectKey(workspaceId, projectId);
+      const inflight = projectFetchInflight.get(key);
+      if (inflight) {
+        const name = await inflight;
+        if (name) projectMap.set(key, name);
+        return;
+      }
 
-      if (!response.ok) return;
-      const payload = (await response.json()) as { name?: unknown };
-      if (typeof payload.name === "string" && payload.name.trim().length > 0) {
-        projectMap.set(projectKey(workspaceId, projectId), payload.name.trim());
+      const fetchPromise = (async () => {
+        const url = `${TOGGL_API_BASE}/workspaces/${workspaceId}/projects/${projectId}`;
+        const response = await fetch(url, {
+          headers: {
+            Authorization: authHeader(token),
+            "Content-Type": "application/json",
+          },
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          if (response.status === 404) return null;
+          throw createApiError(response, "Toggl project request failed");
+        }
+
+        const payload = (await response.json()) as { name?: unknown };
+        if (typeof payload.name !== "string" || payload.name.trim().length === 0) {
+          return null;
+        }
+        const projectName = payload.name.trim();
+        projectNameCache.set(key, { name: projectName, expiresAt: Date.now() + PROJECT_CACHE_TTL_MS });
+        return projectName;
+      })();
+
+      projectFetchInflight.set(key, fetchPromise);
+      try {
+        const name = await fetchPromise;
+        if (name) projectMap.set(key, name);
+      } finally {
+        projectFetchInflight.delete(key);
       }
     })
   );

@@ -22,6 +22,8 @@ type EntriesResponse = {
   date: string;
   error?: string;
   retryAfter?: string | null;
+  quotaRemaining?: string | null;
+  quotaResetsIn?: string | null;
 };
 
 type TeamResponse = {
@@ -29,6 +31,8 @@ type TeamResponse = {
   members: TeamMemberData[];
   error?: string;
   retryAfter?: string | null;
+  quotaRemaining?: string | null;
+  quotaResetsIn?: string | null;
 };
 
 type SavedFilter = {
@@ -287,6 +291,8 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [retryAfter, setRetryAfter] = useState<string | null>(null);
+  const [quotaRemaining, setQuotaRemaining] = useState<string | null>(null);
+  const [quotaResetsIn, setQuotaResetsIn] = useState<string | null>(null);
   const [mode, setMode] = useState<"member" | "team">("member");
   const [selectedEntry, setSelectedEntry] = useState<EntryModalData | null>(null);
 
@@ -337,6 +343,8 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
     setLoading(true);
     setError(null);
     setRetryAfter(null);
+    setQuotaRemaining(null);
+    setQuotaResetsIn(null);
 
     const params = new URLSearchParams({ date });
     const url = mode === "team" ? `/api/team?${params.toString()}` : `/api/entries?${new URLSearchParams({ member, date }).toString()}`;
@@ -347,8 +355,14 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
         if (!res.ok || payload.error) {
           const err = new Error(payload.error || "Request failed") as Error & {
             retryAfter?: string | null;
+            quotaRemaining?: string | null;
+            quotaResetsIn?: string | null;
           };
           err.retryAfter = (payload as EntriesResponse).retryAfter ?? (payload as TeamResponse).retryAfter ?? null;
+          err.quotaRemaining =
+            (payload as EntriesResponse).quotaRemaining ?? (payload as TeamResponse).quotaRemaining ?? null;
+          err.quotaResetsIn =
+            (payload as EntriesResponse).quotaResetsIn ?? (payload as TeamResponse).quotaResetsIn ?? null;
           throw err;
         }
         return payload;
@@ -363,10 +377,12 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
           setTeamData(null);
         }
       })
-      .catch((err: Error & { retryAfter?: string | null }) => {
+      .catch((err: Error & { retryAfter?: string | null; quotaRemaining?: string | null; quotaResetsIn?: string | null }) => {
         if (!active) return;
         setError(err.message);
         setRetryAfter(err.retryAfter ?? null);
+        setQuotaRemaining(err.quotaRemaining ?? null);
+        setQuotaResetsIn(err.quotaResetsIn ?? null);
         setData(null);
         setTeamData(null);
       })
@@ -590,6 +606,12 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
           <p>{error}</p>
           {retryAfter && (
             <p className="mt-2 text-sm text-rose-700">Retry after {retryAfter} seconds.</p>
+          )}
+          {(quotaRemaining || quotaResetsIn) && (
+            <div className="mt-2 text-sm text-rose-700">
+              {quotaRemaining && <p>Quota remaining: {quotaRemaining}</p>}
+              {quotaResetsIn && <p>Quota resets in: {quotaResetsIn} seconds.</p>}
+            </div>
           )}
         </div>
       )}
