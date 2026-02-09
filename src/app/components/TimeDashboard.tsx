@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type Member = { name: string };
 
@@ -29,6 +29,9 @@ type EntriesResponse = {
 type TeamResponse = {
   date: string;
   members: TeamMemberData[];
+  cachedAt?: string;
+  stale?: boolean;
+  warning?: string | null;
   error?: string;
   retryAfter?: string | null;
   quotaRemaining?: string | null;
@@ -304,6 +307,8 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
   const [quotaResetsIn, setQuotaResetsIn] = useState<string | null>(null);
   const [mode, setMode] = useState<"member" | "team" | "all">("member");
   const [selectedEntry, setSelectedEntry] = useState<EntryModalData | null>(null);
+  const [teamRefreshTick, setTeamRefreshTick] = useState(0);
+  const forceTeamRefreshRef = useRef(false);
 
   const hasMembers = members.length > 0;
 
@@ -356,6 +361,9 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
     setQuotaResetsIn(null);
 
     const params = new URLSearchParams({ date });
+    if ((mode === "team" || mode === "all") && forceTeamRefreshRef.current) {
+      params.set("refresh", "1");
+    }
     const url =
       mode === "team" || mode === "all"
         ? `/api/team?${params.toString()}`
@@ -400,13 +408,14 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
       })
       .finally(() => {
         if (!active) return;
+        forceTeamRefreshRef.current = false;
         setLoading(false);
       });
 
     return () => {
       active = false;
     };
-  }, [member, date, mode]);
+  }, [member, date, mode, teamRefreshTick]);
 
   const runningEntry = useMemo(() => {
     if (!data?.current) return null;
@@ -452,6 +461,11 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
       end: entry.stop,
       durationSeconds: getEntrySeconds(entry),
     });
+  };
+
+  const handleTeamRefresh = () => {
+    forceTeamRefreshRef.current = true;
+    setTeamRefreshTick((value) => value + 1);
   };
 
   useEffect(() => {
@@ -534,6 +548,16 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
         >
           All calendars
         </button>
+        {(mode === "team" || mode === "all") && (
+          <button
+            type="button"
+            className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
+            onClick={handleTeamRefresh}
+            disabled={loading}
+          >
+            {loading ? "Refreshing..." : "Refresh now"}
+          </button>
+        )}
       </div>
 
       <div className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:grid-cols-4">
@@ -774,6 +798,17 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
 
       {!loading && !error && (mode === "team" || mode === "all") && teamData && (
         <div className="space-y-4">
+          {(teamData.warning || teamData.stale) && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
+              <p className="text-sm font-semibold">
+                {teamData.warning || "Showing cached snapshot."}
+              </p>
+              {teamData.cachedAt && (
+                <p className="mt-1 text-sm text-amber-800">Snapshot time: {formatDateTime(teamData.cachedAt)}</p>
+              )}
+            </div>
+          )}
+
           {mode === "team" && (
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex items-start justify-between gap-3">

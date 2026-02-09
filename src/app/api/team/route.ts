@@ -23,6 +23,7 @@ type CacheEntry = {
   payload: {
     date: string;
     members: MemberPayload[];
+    cachedAt: string;
     quotaRemaining?: string | null;
     quotaResetsIn?: string | null;
   };
@@ -33,11 +34,12 @@ const responseCache = new Map<string, CacheEntry>();
 function getCached(key: string) {
   const cached = responseCache.get(key);
   if (!cached) return null;
-  if (Date.now() > cached.expiresAt) {
-    responseCache.delete(key);
-    return null;
-  }
+  if (Date.now() > cached.expiresAt) return null;
   return cached.payload;
+}
+
+function getCachedAny(key: string) {
+  return responseCache.get(key)?.payload ?? null;
 }
 
 function setCached(key: string, payload: CacheEntry["payload"]) {
@@ -47,6 +49,7 @@ function setCached(key: string, payload: CacheEntry["payload"]) {
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const dateParam = searchParams.get("date");
+  const forceRefresh = searchParams.get("refresh") === "1";
 
   const dateInput = dateParam ?? new Date().toISOString().slice(0, 10);
   if (!DATE_RE.test(dateInput)) {
@@ -54,9 +57,17 @@ export async function GET(request: NextRequest) {
   }
 
   const cacheKey = `team::${dateInput}`;
-  const cached = getCached(cacheKey);
-  if (cached) {
-    return NextResponse.json(cached);
+  const cachedFresh = getCached(cacheKey);
+  const cachedAny = getCachedAny(cacheKey);
+  if (!forceRefresh && cachedFresh) {
+    return NextResponse.json({ ...cachedFresh, stale: false, warning: null });
+  }
+  if (!forceRefresh && cachedAny) {
+    return NextResponse.json({
+      ...cachedAny,
+      stale: true,
+      warning: "Showing last cached snapshot. Click Refresh to fetch newer data.",
+    });
   }
 
   const members = getTeamMembers();
@@ -94,9 +105,9 @@ export async function GET(request: NextRequest) {
       })
     );
 
-    const payload = { date: dateInput, members: results };
+    const payload = { date: dateInput, members: results, cachedAt: new Date().toISOString() };
     setCached(cacheKey, payload);
-    return NextResponse.json(payload);
+    return NextResponse.json({ ...payload, stale: false, warning: null });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     const status = (error as Error & { status?: number }).status ?? 502;
@@ -105,6 +116,15 @@ export async function GET(request: NextRequest) {
     const quotaResetsIn = (error as Error & { quotaResetsIn?: string | null }).quotaResetsIn ?? null;
 
     if (status === 402) {
+      if (cachedAny) {
+        return NextResponse.json({
+          ...cachedAny,
+          stale: true,
+          warning: "Quota reached. Showing last cached snapshot. Try refresh again after reset.",
+          quotaRemaining,
+          quotaResetsIn,
+        });
+      }
       return NextResponse.json(
         {
           error: "Toggl API quota reached. Please wait for reset before retrying.",
@@ -116,10 +136,27 @@ export async function GET(request: NextRequest) {
     }
 
     if (status === 429) {
+      if (cachedAny) {
+        return NextResponse.json({
+          ...cachedAny,
+          stale: true,
+          warning: "Rate limited. Showing last cached snapshot.",
+          quotaRemaining,
+          quotaResetsIn,
+        });
+      }
       return NextResponse.json(
         { error: "Rate limited by Toggl. Please retry shortly.", retryAfter, quotaRemaining, quotaResetsIn },
         { status: 429, headers: retryAfter ? { "Retry-After": retryAfter } : undefined }
       );
+    }
+
+    if (cachedAny) {
+      return NextResponse.json({
+        ...cachedAny,
+        stale: true,
+        warning: "Toggl is unavailable. Showing last cached snapshot.",
+      });
     }
 
     return NextResponse.json({ error: message }, { status: status >= 400 ? status : 502 });
