@@ -72,7 +72,6 @@ const HOURS_IN_DAY = 24;
 const HOUR_HEIGHT = 56;
 const MIN_BLOCK_HEIGHT = 24;
 const RANKING_ENTRY_CAP_SECONDS = 4 * 60 * 60;
-const DAY_START_HOUR = 8;
 
 function formatDuration(totalSeconds: number): string {
   const hours = Math.floor(totalSeconds / 3600);
@@ -114,13 +113,12 @@ function getDayBoundsMs(dateInput: string) {
   const year = Number(yearStr);
   const monthIndex = Number(monthStr) - 1;
   const day = Number(dayStr);
-  const start = new Date(year, monthIndex, day, DAY_START_HOUR, 0, 0, 0).getTime();
-  const end = start + 24 * 60 * 60 * 1000 - 1;
+  const start = new Date(year, monthIndex, day, 0, 0, 0, 0).getTime();
+  const end = new Date(year, monthIndex, day, 23, 59, 59, 999).getTime();
   return { start, end };
 }
 
-function formatHourLabel(offset: number): string {
-  const hour = (DAY_START_HOUR + offset) % 24;
+function formatHourLabel(hour: number): string {
   if (hour === 0) return "12 AM";
   if (hour < 12) return `${hour} AM`;
   if (hour === 12) return "12 PM";
@@ -588,11 +586,11 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
           <button
             type="button"
             className={`rounded-full px-4 py-2 text-sm font-semibold ${
-              mode === "member" ? "bg-slate-900 text-white" : "bg-white text-slate-600 border border-slate-200"
+              mode === "all" ? "bg-slate-900 text-white" : "bg-white text-slate-600 border border-slate-200"
             }`}
-            onClick={() => setMode("member")}
+            onClick={() => setMode("all")}
           >
-            Member view
+            All calendars
           </button>
           <button
             type="button"
@@ -606,11 +604,11 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
           <button
             type="button"
             className={`rounded-full px-4 py-2 text-sm font-semibold ${
-              mode === "all" ? "bg-slate-900 text-white" : "bg-white text-slate-600 border border-slate-200"
+              mode === "member" ? "bg-slate-900 text-white" : "bg-white text-slate-600 border border-slate-200"
             }`}
-            onClick={() => setMode("all")}
+            onClick={() => setMode("member")}
           >
-            All calendars
+            Member view
           </button>
         </div>
         <button
@@ -751,7 +749,7 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <h2 className="text-lg font-semibold text-slate-900">Day view</h2>
             <p className="mt-1 text-sm text-slate-500">
-              Entries are shown in a workday window from 8:00 AM to next-day 8:00 AM.
+              Entries are ordered from start of day to end of day.
             </p>
             <div className="mt-4">
               {data.entries.length === 0 && (

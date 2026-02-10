@@ -43,12 +43,6 @@ function setCached(key: string, payload: CacheEntry["payload"]) {
   responseCache.set(key, { payload, expiresAt: Date.now() + CACHE_TTL_MS });
 }
 
-function nextUtcDate(dateInput: string): string {
-  const date = new Date(`${dateInput}T00:00:00Z`);
-  date.setUTCDate(date.getUTCDate() + 1);
-  return date.toISOString().slice(0, 10);
-}
-
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const member = searchParams.get("member");
@@ -69,9 +63,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Invalid date" }, { status: 400 });
   }
 
-  const nextDate = nextUtcDate(dateInput);
-  const startDate = `${dateInput}T08:00:00Z`;
-  const endDate = `${nextDate}T07:59:59Z`;
+  const startDate = `${dateInput}T00:00:00Z`;
+  const endDate = `${dateInput}T23:59:59Z`;
   const cacheKey = `${member.toLowerCase()}::${dateInput}`;
   const nowMs = Date.now();
   const isCurrentWindow = nowMs >= new Date(startDate).getTime() && nowMs <= new Date(endDate).getTime();
