@@ -166,9 +166,8 @@ function buildTimelineBlocks(entries: TimeEntry[], dateInput: string) {
   const pxPerMs = HOUR_HEIGHT / (60 * 60 * 1000);
   const minDurationMs = MIN_BLOCK_HEIGHT / pxPerMs;
   const sorted = [...entries].sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
-  const active: Array<{ lane: number; endMs: number }> = [];
   const blocks: TimelineBlock[] = [];
-  let maxLanes = 1;
+  let lastBottomPx = -Infinity;
 
   for (const entry of sorted) {
     const startMs = new Date(entry.start).getTime();
@@ -179,25 +178,16 @@ function buildTimelineBlocks(entries: TimeEntry[], dateInput: string) {
     const visibleEnd = Math.min(endMs, end);
     if (visibleEnd <= visibleStart) continue;
     const displayEnd = Math.min(end, Math.max(visibleEnd, visibleStart + minDurationMs));
-
-    for (let i = active.length - 1; i >= 0; i -= 1) {
-      if (active[i].endMs <= visibleStart) {
-        active.splice(i, 1);
-      }
-    }
-
-    const usedLanes = new Set(active.map((item) => item.lane));
-    let lane = 0;
-    while (usedLanes.has(lane)) lane += 1;
-
-    active.push({ lane, endMs: displayEnd });
-    maxLanes = Math.max(maxLanes, lane + 1);
+    const idealTopPx = (visibleStart - start) * pxPerMs;
+    const heightPx = (displayEnd - visibleStart) * pxPerMs;
+    const topPx = Math.max(idealTopPx, lastBottomPx + 2);
+    lastBottomPx = topPx + heightPx;
 
     blocks.push({
       id: `${entry.id}-${startMs}`,
-      lane,
-      topPx: (visibleStart - start) * pxPerMs,
-      heightPx: (displayEnd - visibleStart) * pxPerMs,
+      lane: 0,
+      topPx,
+      heightPx,
       title: entry.description?.trim() || "(No description)",
       project: entry.project_name?.trim() || "No project",
       timeRange: `${formatTime(entry.start)} → ${formatTime(entry.stop)}`,
@@ -205,7 +195,7 @@ function buildTimelineBlocks(entries: TimeEntry[], dateInput: string) {
     });
   }
 
-  return { blocks, maxLanes };
+  return { blocks, maxLanes: 1 };
 }
 
 function getClosedEntryRange(entry: TimeEntry): { startMs: number; endMs: number; seconds: number } | null {
