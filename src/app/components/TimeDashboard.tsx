@@ -307,6 +307,29 @@ function getProjectColorClass(project: string): string {
   return palette[hash % palette.length];
 }
 
+function getAvatarPalette(name: string): string {
+  const palettes = [
+    "from-sky-400 to-blue-500",
+    "from-emerald-400 to-teal-500",
+    "from-amber-400 to-orange-500",
+    "from-indigo-400 to-violet-500",
+    "from-cyan-400 to-sky-500",
+    "from-lime-400 to-green-500",
+  ];
+  let hash = 0;
+  for (let i = 0; i < name.length; i += 1) {
+    hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+  }
+  return palettes[hash % palettes.length];
+}
+
+function getBarPalette(index: number): string {
+  if (index === 0) return "from-amber-400 to-yellow-500";
+  if (index === 1) return "from-slate-300 to-slate-500";
+  if (index === 2) return "from-orange-400 to-amber-500";
+  return "from-sky-500 to-cyan-500";
+}
+
 function buildSummary(entries: TimeEntry[]) {
   const totals = new Map<string, number>();
   entries.forEach((entry) => {
@@ -874,44 +897,45 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
               {teamRanking.length === 0 && (
                 <p className="mt-4 text-sm text-slate-500">No entries yet.</p>
               )}
-              <div className="mt-4 space-y-3">
-                {teamRanking.map((row, index) => {
-                  const topScore = teamRanking[0]?.rankedSeconds ?? 0;
-                  const scorePct = topScore > 0 ? Math.max(8, Math.round((row.rankedSeconds / topScore) * 100)) : 8;
-                  const rankClass =
-                    index === 0
-                      ? "bg-amber-100 text-amber-800 border-amber-300"
-                      : index === 1
-                        ? "bg-slate-100 text-slate-700 border-slate-300"
-                        : index === 2
-                          ? "bg-orange-100 text-orange-800 border-orange-300"
-                          : "bg-sky-50 text-sky-700 border-sky-200";
-                  return (
-                    <article key={row.name} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <span className={`inline-flex min-w-12 justify-center rounded-full border px-3 py-1 text-sm font-semibold ${rankClass}`}>
-                            #{index + 1}
-                          </span>
-                          <div>
-                            <p className="text-base font-semibold text-slate-900">{row.name}</p>
-                            <p className="text-xs text-slate-500">
-                              Started {formatTime(row.firstStart)} | Ended {formatTime(row.lastEnd)} | Longest break {formatDuration(row.longestBreakSeconds)}
-                            </p>
+              {teamRanking.length > 0 && (
+                <div className="mt-4 overflow-x-auto">
+                  <div className="min-w-[760px]">
+                    <div className="flex h-[320px] items-end gap-4 rounded-xl border border-slate-200 bg-white px-4 py-4">
+                      {teamRanking.map((row, index) => {
+                        const topScore = teamRanking[0]?.rankedSeconds ?? 0;
+                        const barHeight = topScore > 0 ? Math.max(36, Math.round((row.rankedSeconds / topScore) * 220)) : 36;
+                        const avatarPalette = getAvatarPalette(row.name);
+                        const barPalette = getBarPalette(index);
+                        return (
+                          <div key={row.name} className="flex w-[92px] flex-col items-center gap-2">
+                            <div className={`relative flex h-12 w-12 items-center justify-center rounded-full border border-white bg-gradient-to-br text-lg shadow ${avatarPalette}`}>
+                              <span className="text-white">♂</span>
+                              <span className="absolute -bottom-1 -right-1 rounded-full bg-white px-1 text-[10px] font-bold text-slate-700">
+                                {row.name.slice(0, 1).toUpperCase()}
+                              </span>
+                            </div>
+                            <div
+                              className={`w-full rounded-t-xl bg-gradient-to-t ${barPalette} shadow-sm`}
+                              style={{ height: `${barHeight}px` }}
+                              title={`${row.name}: ${formatDuration(row.rankedSeconds)}`}
+                            />
+                            <p className="truncate text-center text-xs font-semibold text-slate-800">{row.name}</p>
+                            <p className="text-center text-[11px] text-slate-600">{formatDuration(row.rankedSeconds)}</p>
+                            <p className="text-center text-[11px] text-slate-500">#{index + 1}</p>
                           </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm font-semibold text-slate-900">{formatDuration(row.rankedSeconds)}</p>
-                          <p className="text-xs text-slate-500">{row.entryCount} entries</p>
-                        </div>
-                      </div>
-                      <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-100">
-                        <div className="h-full rounded-full bg-gradient-to-r from-sky-500 to-emerald-500" style={{ width: `${scorePct}%` }} />
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
+                        );
+                      })}
+                    </div>
+                    <div className="mt-3 grid gap-2 md:grid-cols-2">
+                      {teamRanking.map((row) => (
+                        <p key={`${row.name}-meta`} className="text-xs text-slate-600">
+                          <span className="font-semibold text-slate-800">{row.name}</span>: Start {formatTime(row.firstStart)} | End {formatTime(row.lastEnd)} | Longest break {formatDuration(row.longestBreakSeconds)} | {row.entryCount} entries
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
