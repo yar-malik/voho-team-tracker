@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 
 type Member = { name: string };
 
@@ -167,6 +167,12 @@ type EntryModalData = {
   start: string | null;
   end: string | null;
   durationSeconds: number;
+};
+
+type HoverTooltipState = {
+  text: string;
+  left: number;
+  top: number;
 };
 
 function buildTimelineBlocks(entries: TimeEntry[], dateInput: string) {
@@ -395,6 +401,7 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
   const [selectedEntry, setSelectedEntry] = useState<EntryModalData | null>(null);
   const [manualRefreshTick, setManualRefreshTick] = useState(0);
   const [lastUpdateMeta, setLastUpdateMeta] = useState<{ at: string; source: "auto" | "manual" | "cached" } | null>(null);
+  const [hoverTooltip, setHoverTooltip] = useState<HoverTooltipState | null>(null);
   const forceRefreshRef = useRef(false);
   const refreshSourceRef = useRef<"auto" | "manual" | "cached">("cached");
   const dayCalendarScrollRef = useRef<HTMLDivElement | null>(null);
@@ -629,6 +636,28 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
     refreshSourceRef.current = "manual";
     forceRefreshRef.current = true;
     setManualRefreshTick((value) => value + 1);
+  };
+
+  const hideHoverTooltip = () => setHoverTooltip(null);
+
+  const placeHoverTooltip = (event: ReactMouseEvent<HTMLElement>, text: string) => {
+    const tooltipWidth = 300;
+    const lineCount = text.split("\n").length;
+    const tooltipHeight = 16 + lineCount * 18;
+    const margin = 12;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    let left = event.clientX + 14;
+    let top = event.clientY + 14;
+    if (left + tooltipWidth > viewportWidth - margin) {
+      left = Math.max(margin, event.clientX - tooltipWidth - 14);
+    }
+    if (top + tooltipHeight > viewportHeight - margin) {
+      top = Math.max(margin, viewportHeight - tooltipHeight - margin);
+    }
+
+    setHoverTooltip({ text, left, top });
   };
 
   useEffect(() => {
@@ -921,6 +950,15 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
                             width: `calc(${100 / timeline.maxLanes}% - 0.5rem)`,
                           }}
                           title={sourceEntry ? getEntryTooltipText(sourceEntry, member) : undefined}
+                          onMouseEnter={(event) => {
+                            if (!sourceEntry) return;
+                            placeHoverTooltip(event, getEntryTooltipText(sourceEntry, member));
+                          }}
+                          onMouseMove={(event) => {
+                            if (!sourceEntry) return;
+                            placeHoverTooltip(event, getEntryTooltipText(sourceEntry, member));
+                          }}
+                          onMouseLeave={hideHoverTooltip}
                           onClick={() => {
                             if (!sourceEntry) return;
                             openEntryModal(sourceEntry, member);
@@ -1096,7 +1134,13 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
                           const widthPercent =
                             maxTaskSeconds > 0 ? Math.max(10, Math.round((item.seconds / maxTaskSeconds) * 100)) : 10;
                           return (
-                            <div key={`${item.project}-${item.label}`} title={getTaskSummaryTooltip(item)}>
+                            <div
+                              key={`${item.project}-${item.label}`}
+                              title={getTaskSummaryTooltip(item)}
+                              onMouseEnter={(event) => placeHoverTooltip(event, getTaskSummaryTooltip(item))}
+                              onMouseMove={(event) => placeHoverTooltip(event, getTaskSummaryTooltip(item))}
+                              onMouseLeave={hideHoverTooltip}
+                            >
                               <div className="mb-1 flex items-center justify-between gap-2 text-xs">
                                 <span className="truncate text-slate-700">{item.label}</span>
                                 <span className="font-medium text-slate-900">{formatDuration(item.seconds)}</span>
@@ -1249,6 +1293,15 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
                                 width: `calc(${100 / memberTimeline.maxLanes}% - 0.5rem)`,
                               }}
                               title={sourceEntry ? getEntryTooltipText(sourceEntry, memberTimeline.name) : undefined}
+                              onMouseEnter={(event) => {
+                                if (!sourceEntry) return;
+                                placeHoverTooltip(event, getEntryTooltipText(sourceEntry, memberTimeline.name));
+                              }}
+                              onMouseMove={(event) => {
+                                if (!sourceEntry) return;
+                                placeHoverTooltip(event, getEntryTooltipText(sourceEntry, memberTimeline.name));
+                              }}
+                              onMouseLeave={hideHoverTooltip}
                               onClick={() => {
                                 if (!sourceEntry) return;
                                 openEntryModal(sourceEntry, memberTimeline.name);
@@ -1269,6 +1322,15 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
           </div>
           )}
 
+        </div>
+      )}
+
+      {hoverTooltip && (
+        <div
+          className="pointer-events-none fixed z-[70] max-w-[300px] whitespace-pre-line rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 shadow-xl"
+          style={{ left: `${hoverTooltip.left}px`, top: `${hoverTooltip.top}px` }}
+        >
+          {hoverTooltip.text}
         </div>
       )}
 
