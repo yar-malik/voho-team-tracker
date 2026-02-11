@@ -153,11 +153,6 @@ type TeamRankingRow = {
   longestBreakSeconds: number;
 };
 
-type OneDayOverviewRow = {
-  name: string;
-  totalSeconds: number;
-  entryCount: number;
-};
 
 type EntryModalData = {
   memberName: string;
@@ -260,22 +255,6 @@ function buildTeamRanking(members: TeamMemberData[]): TeamRankingRow[] {
   });
 }
 
-function buildOneDayOverviewRows(members: TeamMemberData[]): OneDayOverviewRow[] {
-  const rows = members.map((member) => {
-    const filtered = member.entries.filter((entry) => !isExcludedFromRanking(entry.project_name));
-    const totalSeconds = filtered.reduce((acc, entry) => acc + getEntrySeconds(entry), 0);
-    return {
-      name: member.name,
-      totalSeconds,
-      entryCount: filtered.length,
-    };
-  });
-  return rows.sort((a, b) => {
-    if (b.totalSeconds !== a.totalSeconds) return b.totalSeconds - a.totalSeconds;
-    if (b.entryCount !== a.entryCount) return b.entryCount - a.entryCount;
-    return a.name.localeCompare(b.name);
-  });
-}
 
 function formatDateTime(iso: string | null): string {
   if (!iso) return "—";
@@ -524,11 +503,6 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
   const teamRanking = useMemo(() => {
     if (!teamData) return [] as TeamRankingRow[];
     return buildTeamRanking(teamData.members);
-  }, [teamData]);
-
-  const oneDayOverview = useMemo(() => {
-    if (!teamData) return [] as OneDayOverviewRow[];
-    return buildOneDayOverviewRows(teamData.members);
   }, [teamData]);
 
   const teamTimeline = useMemo(() => {
@@ -888,80 +862,55 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
       {!loading && !error && (mode === "team" || mode === "all") && teamData && (
         <div className="space-y-4">
           {mode === "all" && (
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h2 className="text-lg font-semibold text-slate-900">1 Day overview</h2>
-              <p className="text-sm text-slate-500">
-                Daily leaderboard (excludes project: Non-Work-Task).
-              </p>
-              <div className="mt-4 overflow-x-auto">
-                <table className="min-w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-200 text-left text-slate-500">
-                      <th className="px-2 py-2 font-semibold">Rank</th>
-                      <th className="px-2 py-2 font-semibold">Member</th>
-                      <th className="px-2 py-2 font-semibold">Total</th>
-                      <th className="px-2 py-2 font-semibold">Entries</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {oneDayOverview.map((row, index) => (
-                      <tr key={row.name} className="border-b border-slate-100">
-                        <td className="px-2 py-2 font-semibold text-slate-900">{index + 1}</td>
-                        <td className="px-2 py-2 text-slate-800">{row.name}</td>
-                        <td className="px-2 py-2 text-slate-800">{formatDuration(row.totalSeconds)}</td>
-                        <td className="px-2 py-2 text-slate-800">{row.entryCount}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {mode === "all" && (
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-sky-50 via-white to-emerald-50 p-5 shadow-sm">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h2 className="text-lg font-semibold text-slate-900">Team ranking</h2>
                   <p className="text-sm text-slate-500">
-                    Ranking uses closed entries only and excludes project: Non-Work-Task.
+                    Closed-entry leaderboard. Project <span className="font-semibold">Non-Work-Task</span> is excluded.
                   </p>
                 </div>
               </div>
-              <div className="mt-4 overflow-x-auto">
-                <table className="min-w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-200 text-left text-slate-500">
-                      <th className="px-2 py-2 font-semibold">Rank</th>
-                      <th className="px-2 py-2 font-semibold">Member</th>
-                      <th className="px-2 py-2 font-semibold">Ranked hours</th>
-                      <th className="px-2 py-2 font-semibold">Entries</th>
-                      <th className="px-2 py-2 font-semibold">Started</th>
-                      <th className="px-2 py-2 font-semibold">Ended</th>
-                      <th className="px-2 py-2 font-semibold">Longest break</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {teamRanking.length === 0 && (
-                      <tr>
-                        <td className="px-2 py-3 text-slate-500" colSpan={7}>
-                          No entries yet.
-                        </td>
-                      </tr>
-                    )}
-                    {teamRanking.map((row, index) => (
-                      <tr key={row.name} className="border-b border-slate-100">
-                        <td className="px-2 py-2 font-semibold text-slate-900">{index + 1}</td>
-                        <td className="px-2 py-2 text-slate-800">{row.name}</td>
-                        <td className="px-2 py-2 text-slate-800">{formatDuration(row.rankedSeconds)}</td>
-                        <td className="px-2 py-2 text-slate-800">{row.entryCount}</td>
-                        <td className="px-2 py-2 text-slate-700">{formatTime(row.firstStart)}</td>
-                        <td className="px-2 py-2 text-slate-700">{formatTime(row.lastEnd)}</td>
-                        <td className="px-2 py-2 text-slate-700">{formatDuration(row.longestBreakSeconds)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              {teamRanking.length === 0 && (
+                <p className="mt-4 text-sm text-slate-500">No entries yet.</p>
+              )}
+              <div className="mt-4 space-y-3">
+                {teamRanking.map((row, index) => {
+                  const topScore = teamRanking[0]?.rankedSeconds ?? 0;
+                  const scorePct = topScore > 0 ? Math.max(8, Math.round((row.rankedSeconds / topScore) * 100)) : 8;
+                  const rankClass =
+                    index === 0
+                      ? "bg-amber-100 text-amber-800 border-amber-300"
+                      : index === 1
+                        ? "bg-slate-100 text-slate-700 border-slate-300"
+                        : index === 2
+                          ? "bg-orange-100 text-orange-800 border-orange-300"
+                          : "bg-sky-50 text-sky-700 border-sky-200";
+                  return (
+                    <article key={row.name} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <span className={`inline-flex min-w-12 justify-center rounded-full border px-3 py-1 text-sm font-semibold ${rankClass}`}>
+                            #{index + 1}
+                          </span>
+                          <div>
+                            <p className="text-base font-semibold text-slate-900">{row.name}</p>
+                            <p className="text-xs text-slate-500">
+                              Started {formatTime(row.firstStart)} | Ended {formatTime(row.lastEnd)} | Longest break {formatDuration(row.longestBreakSeconds)}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-semibold text-slate-900">{formatDuration(row.rankedSeconds)}</p>
+                          <p className="text-xs text-slate-500">{row.entryCount} entries</p>
+                        </div>
+                      </div>
+                      <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                        <div className="h-full rounded-full bg-gradient-to-r from-sky-500 to-emerald-500" style={{ width: `${scorePct}%` }} />
+                      </div>
+                    </article>
+                  );
+                })}
               </div>
             </div>
           )}
