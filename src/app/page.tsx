@@ -6,7 +6,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-[#EDFDF5]">
-      <main className="mx-auto flex w-full max-w-none flex-col gap-8 px-6 py-8 md:px-8">
+      <main className="mx-auto flex w-full max-w-none flex-col gap-8 px-8 py-8 md:px-10">
         <header className="space-y-3">
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-cyan-700">
             Voho Team Overview
