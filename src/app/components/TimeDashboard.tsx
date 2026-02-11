@@ -307,29 +307,6 @@ function getProjectColorClass(project: string): string {
   return palette[hash % palette.length];
 }
 
-function getAvatarPalette(name: string): string {
-  const palettes = [
-    "from-sky-400 to-blue-500",
-    "from-emerald-400 to-teal-500",
-    "from-amber-400 to-orange-500",
-    "from-indigo-400 to-violet-500",
-    "from-cyan-400 to-sky-500",
-    "from-lime-400 to-green-500",
-  ];
-  let hash = 0;
-  for (let i = 0; i < name.length; i += 1) {
-    hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
-  }
-  return palettes[hash % palettes.length];
-}
-
-function getBarPalette(index: number): string {
-  if (index === 0) return "from-amber-400 to-yellow-500";
-  if (index === 1) return "from-slate-300 to-slate-500";
-  if (index === 2) return "from-orange-400 to-amber-500";
-  return "from-sky-500 to-cyan-500";
-}
-
 function buildSummary(entries: TimeEntry[]) {
   const totals = new Map<string, number>();
   entries.forEach((entry) => {
@@ -885,7 +862,7 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
       {!loading && !error && (mode === "team" || mode === "all") && teamData && (
         <div className="space-y-4">
           {mode === "all" && (
-            <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-sky-50 via-white to-emerald-50 p-5 shadow-sm">
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h2 className="text-lg font-semibold text-slate-900">Team ranking</h2>
@@ -898,44 +875,97 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
                 <p className="mt-4 text-sm text-slate-500">No entries yet.</p>
               )}
               {teamRanking.length > 0 && (
-                <div className="mt-4 overflow-x-auto">
-                  <div className="min-w-[760px]">
-                    <div className="flex h-[320px] items-end gap-4 rounded-xl border border-slate-200 bg-white px-4 py-4">
-                      {teamRanking.map((row, index) => {
-                        const topScore = teamRanking[0]?.rankedSeconds ?? 0;
-                        const barHeight = topScore > 0 ? Math.max(36, Math.round((row.rankedSeconds / topScore) * 220)) : 36;
-                        const avatarPalette = getAvatarPalette(row.name);
-                        const barPalette = getBarPalette(index);
-                        return (
-                          <div key={row.name} className="flex w-[92px] flex-col items-center gap-2">
-                            <div className={`relative flex h-12 w-12 items-center justify-center rounded-full border border-white bg-gradient-to-br text-lg shadow ${avatarPalette}`}>
-                              <span className="text-white">♂</span>
-                              <span className="absolute -bottom-1 -right-1 rounded-full bg-white px-1 text-[10px] font-bold text-slate-700">
-                                {row.name.slice(0, 1).toUpperCase()}
-                              </span>
-                            </div>
-                            <div
-                              className={`w-full rounded-t-xl bg-gradient-to-t ${barPalette} shadow-sm`}
-                              style={{ height: `${barHeight}px` }}
-                              title={`${row.name}: ${formatDuration(row.rankedSeconds)}`}
-                            />
-                            <p className="truncate text-center text-xs font-semibold text-slate-800">{row.name}</p>
-                            <p className="text-center text-[11px] text-slate-600">{formatDuration(row.rankedSeconds)}</p>
-                            <p className="text-center text-[11px] text-slate-500">#{index + 1}</p>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <div className="mt-3 grid gap-2 md:grid-cols-2">
-                      {teamRanking.map((row) => (
-                        <p key={`${row.name}-meta`} className="text-xs text-slate-600">
-                          <span className="font-semibold text-slate-800">{row.name}</span>: Start {formatTime(row.firstStart)} | End {formatTime(row.lastEnd)} | Longest break {formatDuration(row.longestBreakSeconds)} | {row.entryCount} entries
+                <div className="mt-4 space-y-3">
+                  {teamRanking.map((row, index) => {
+                    const topScore = teamRanking[0]?.rankedSeconds ?? 0;
+                    const barWidth = topScore > 0 ? Math.max(8, Math.round((row.rankedSeconds / topScore) * 100)) : 8;
+                    return (
+                      <div key={row.name} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-sm font-semibold text-slate-900">
+                            #{index + 1} {row.name}
+                          </p>
+                          <p className="text-sm font-semibold text-slate-800">{formatDuration(row.rankedSeconds)}</p>
+                        </div>
+                        <div className="mt-2 h-2.5 w-full rounded-full bg-slate-200">
+                          <div
+                            className="h-full rounded-full bg-gradient-to-r from-sky-500 to-cyan-400"
+                            style={{ width: `${barWidth}%` }}
+                            title={`${row.name}: ${formatDuration(row.rankedSeconds)}`}
+                          />
+                        </div>
+                        <p className="mt-2 text-xs text-slate-600">
+                          Start {formatTime(row.firstStart)} | End {formatTime(row.lastEnd)} | Longest break {formatDuration(row.longestBreakSeconds)} | {row.entryCount} entries
                         </p>
-                      ))}
-                    </div>
-                  </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
+            </div>
+          )}
+
+          {mode === "all" && (
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <h2 className="text-lg font-semibold text-slate-900">Member task cards</h2>
+              <p className="text-sm text-slate-500">
+                Compact per-member task split for the selected day.
+              </p>
+              <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {teamData.members.map((memberData) => {
+                  const running = memberData.entries.find((entry) => entry.duration < 0) ?? null;
+                  const memberSummary = buildSummary(memberData.entries).slice(0, 4);
+                  const maxTaskSeconds = memberSummary[0]?.seconds ?? 0;
+                  return (
+                    <div key={memberData.name} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <h3 className="text-base font-semibold text-slate-900">{memberData.name}</h3>
+                          <p className="text-sm text-slate-500">Total {formatDuration(memberData.totalSeconds)}</p>
+                        </div>
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                            running ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"
+                          }`}
+                        >
+                          {running ? "Running" : "Idle"}
+                        </span>
+                      </div>
+                      <div className="mt-3 space-y-2">
+                        {memberSummary.length === 0 && (
+                          <p className="text-sm text-slate-500">No entries yet.</p>
+                        )}
+                        {memberSummary.map((item) => {
+                          const widthPercent =
+                            maxTaskSeconds > 0 ? Math.max(10, Math.round((item.seconds / maxTaskSeconds) * 100)) : 10;
+                          return (
+                            <div key={item.label}>
+                              <div className="mb-1 flex items-center justify-between gap-2 text-xs">
+                                <span className="truncate text-slate-700">{item.label}</span>
+                                <span className="font-medium text-slate-900">{formatDuration(item.seconds)}</span>
+                              </div>
+                              <div className="h-2 w-full rounded-full bg-slate-200">
+                                <div
+                                  className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-sky-400"
+                                  style={{ width: `${widthPercent}%` }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {mode === "team" && (
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <p className="text-sm text-slate-600">
+                Team overview now focuses on summary data. Detailed per-member task cards are available in All calendars.
+              </p>
             </div>
           )}
 
@@ -1076,49 +1106,6 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
           </div>
           )}
 
-          {mode === "team" && (
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {teamData.members.map((memberData) => {
-                const running = memberData.entries.find((entry) => entry.duration < 0) ?? null;
-                const memberSummary = buildSummary(memberData.entries).slice(0, 3);
-                return (
-                  <div key={memberData.name} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <h3 className="text-lg font-semibold text-slate-900">{memberData.name}</h3>
-                        <p className="text-sm text-slate-500">Total {formatDuration(memberData.totalSeconds)}</p>
-                      </div>
-                      <span
-                        className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                          running ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"
-                        }`}
-                      >
-                        {running ? "Running" : "Idle"}
-                      </span>
-                    </div>
-                    <div className="mt-4">
-                      {running ? (
-                        <p className="text-sm text-emerald-700">Now: {running.description || "(No description)"}</p>
-                      ) : (
-                        <p className="text-sm text-slate-500">No active timer.</p>
-                      )}
-                    </div>
-                    <div className="mt-4 space-y-1">
-                      {memberSummary.length === 0 && (
-                        <p className="text-sm text-slate-500">No entries yet.</p>
-                      )}
-                      {memberSummary.map((item) => (
-                        <div key={item.label} className="flex items-center justify-between text-sm">
-                          <span className="text-slate-600">{item.label}</span>
-                          <span className="font-medium text-slate-900">{formatDuration(item.seconds)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
         </div>
       )}
 
