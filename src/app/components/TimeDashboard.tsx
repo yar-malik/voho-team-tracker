@@ -1120,11 +1120,13 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
                         ) : (
                           <p className="text-xs text-slate-500">Now: no active timer</p>
                         )}
-                        <p className="text-xs text-slate-600">
-                          <span className="rounded-md bg-fuchsia-100 px-2 py-0.5 font-semibold text-fuchsia-700">
-                            Last worked: {running ? "active now" : formatAgoFromMs(lastActivityMs)}
-                          </span>
-                        </p>
+                        {!running && (
+                          <p className="text-xs text-slate-600">
+                            <span className="rounded-md bg-slate-200 px-2 py-0.5 font-semibold text-slate-700">
+                              Idle since {formatAgoFromMs(lastActivityMs)}
+                            </span>
+                          </p>
+                        )}
                       </div>
                       <div className="mt-3 space-y-2">
                         {memberSummary.length === 0 && (
