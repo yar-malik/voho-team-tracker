@@ -5,11 +5,11 @@ export default function Home() {
   const members = getTeamMembers();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-sky-50">
+    <div className="min-h-screen bg-gradient-to-br from-sky-50 via-white to-emerald-50">
       <main className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-6 py-12">
         <header className="space-y-3">
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-sky-600">
-            Team Toggl Overview
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-cyan-700">
+            Voho Team Overview
           </p>
           <h1 className="text-3xl font-semibold text-slate-900 md:text-4xl">
             Track daily activity without hopping between accounts.

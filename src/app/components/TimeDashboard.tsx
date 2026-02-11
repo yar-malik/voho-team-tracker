@@ -618,13 +618,15 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 rounded-3xl border border-slate-200/70 bg-gradient-to-br from-white via-sky-50/35 to-emerald-50/35 p-4 md:p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
             className={`rounded-full px-4 py-2 text-sm font-semibold ${
-              mode === "all" ? "bg-slate-900 text-white" : "bg-white text-slate-600 border border-slate-200"
+              mode === "all"
+                ? "border border-sky-300 bg-sky-100 text-sky-900"
+                : "bg-white text-slate-600 border border-slate-200"
             }`}
             onClick={() => setMode("all")}
           >
@@ -633,7 +635,9 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
           <button
             type="button"
             className={`rounded-full px-4 py-2 text-sm font-semibold ${
-              mode === "team" ? "bg-slate-900 text-white" : "bg-white text-slate-600 border border-slate-200"
+              mode === "team"
+                ? "border border-emerald-300 bg-emerald-100 text-emerald-900"
+                : "bg-white text-slate-600 border border-slate-200"
             }`}
             onClick={() => setMode("team")}
           >
@@ -650,7 +654,7 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
         </button>
       </div>
 
-      <div className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:grid-cols-4">
+      <div className="grid gap-4 rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-sky-50/40 p-6 shadow-sm md:grid-cols-4">
         {mode === "member" && (
           <div className="md:col-span-2">
             <label className="text-sm font-medium text-slate-600">Team member</label>
@@ -686,7 +690,7 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
           />
         </div>
         {mode === "member" && (
-          <div className="flex flex-col justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+          <div className="flex flex-col justify-between rounded-xl border border-sky-200 bg-sky-50/70 px-4 py-3">
             <span className="text-xs uppercase tracking-wide text-slate-500">Total logged</span>
             <span className="text-2xl font-semibold text-slate-900">
               {data ? formatDuration(data.totalSeconds) : "—"}
@@ -696,7 +700,7 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
       </div>
 
       {mode === "member" && (
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-emerald-50/35 p-6 shadow-sm">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-600">
             Saved filters
           </h2>
@@ -705,7 +709,7 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
               <span className="text-sm text-slate-500">No saved filters yet.</span>
             )}
             {savedFilters.map((item) => (
-              <div key={item.id} className="flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1">
+              <div key={item.id} className="flex items-center gap-2 rounded-full bg-sky-100/70 px-3 py-1">
                 <button
                   type="button"
                   className="text-sm font-medium text-slate-700"
@@ -733,7 +737,7 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
             />
             <button
               type="button"
-              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
+              className="rounded-xl bg-cyan-700 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-800"
               onClick={handleSaveFilter}
             >
               Save current view
