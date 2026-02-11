@@ -345,6 +345,17 @@ function formatAgoFromMs(timestampMs: number): string {
   return `${hours}h ${minutes}m ago`;
 }
 
+function getEntryCardDetails(entry: TimeEntry, memberName: string) {
+  return {
+    memberName,
+    description: entry.description?.trim() || "(No description)",
+    project: entry.project_name?.trim() || "No project",
+    start: formatDateTime(entry.start),
+    end: entry.stop ? formatDateTime(entry.stop) : "Running",
+    duration: formatDuration(getEntrySeconds(entry)),
+  };
+}
+
 export default function TimeDashboard({ members }: { members: Member[] }) {
   const defaultMember = members[0]?.name ?? "";
   const [member, setMember] = useState(defaultMember);
@@ -803,11 +814,12 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
                       {timeline.blocks.map((block) => {
                         const sourceEntry = data.entries.find((entry) => `${entry.id}-${new Date(entry.start).getTime()}` === block.id);
                         const colorClass = getProjectColorClass(block.project);
+                        const details = sourceEntry ? getEntryCardDetails(sourceEntry, member) : null;
                         return (
                         <button
                           key={block.id}
                           type="button"
-                          className={`absolute overflow-hidden rounded-lg border px-2 py-1 text-left shadow-sm ${colorClass}`}
+                          className={`group absolute rounded-lg border px-2 py-1 text-left shadow-sm ${colorClass}`}
                           style={{
                             top: `${block.topPx}px`,
                             height: `${block.heightPx}px`,
@@ -819,10 +831,32 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
                             openEntryModal(sourceEntry, member);
                           }}
                         >
-                          <p className="truncate text-xs font-semibold text-slate-900">{block.title}</p>
-                          <p className="truncate text-[11px] text-slate-700">Project: {block.project}</p>
-                          <p className="truncate text-[11px] text-slate-600">{block.timeRange}</p>
-                          <p className="truncate text-[11px] text-slate-600">{block.durationLabel}</p>
+                          <div className="overflow-hidden">
+                            <p className="truncate text-xs font-semibold text-slate-900">{block.title}</p>
+                            <p className="truncate text-[11px] text-slate-700">Project: {block.project}</p>
+                            <p className="truncate text-[11px] text-slate-600">{block.timeRange}</p>
+                            <p className="truncate text-[11px] text-slate-600">{block.durationLabel}</p>
+                          </div>
+                          {details && (
+                            <div className="pointer-events-none absolute left-full top-0 z-20 ml-2 hidden w-64 rounded-lg border border-slate-200 bg-white p-3 text-left shadow-lg group-hover:block group-focus-visible:block">
+                              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{details.memberName}</p>
+                              <p className="mt-1 text-sm text-slate-700">
+                                <span className="font-semibold text-slate-900">Description:</span> {details.description}
+                              </p>
+                              <p className="text-sm text-slate-700">
+                                <span className="font-semibold text-slate-900">Project:</span> {details.project}
+                              </p>
+                              <p className="text-sm text-slate-700">
+                                <span className="font-semibold text-slate-900">Start:</span> {details.start}
+                              </p>
+                              <p className="text-sm text-slate-700">
+                                <span className="font-semibold text-slate-900">End:</span> {details.end}
+                              </p>
+                              <p className="text-sm text-slate-700">
+                                <span className="font-semibold text-slate-900">Duration:</span> {details.duration}
+                              </p>
+                            </div>
+                          )}
                         </button>
                       );
                       })}
@@ -943,20 +977,22 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
               </p>
               <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {teamData.members.map((memberData) => {
-                  const running = memberData.entries.find((entry) => entry.duration < 0) ?? null;
-                  const memberSummary = buildTaskProjectSummary(memberData.entries).slice(0, 4);
-                  const lastActivityMs = memberData.entries.reduce((latest, entry) => {
+                  const cardEntries = memberData.entries.filter((entry) => !isExcludedFromRanking(entry.project_name));
+                  const running = cardEntries.find((entry) => entry.duration < 0) ?? null;
+                  const memberSummary = buildTaskProjectSummary(cardEntries).slice(0, 4);
+                  const lastActivityMs = cardEntries.reduce((latest, entry) => {
                     const endMs = getEntryEndMs(entry);
                     if (Number.isNaN(endMs)) return latest;
                     return Math.max(latest, endMs);
                   }, Number.NEGATIVE_INFINITY);
+                  const cardTotalSeconds = cardEntries.reduce((total, entry) => total + getEntrySeconds(entry), 0);
                   const maxTaskSeconds = memberSummary[0]?.seconds ?? 0;
                   return (
                     <div key={memberData.name} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                       <div className="flex items-start justify-between">
                         <div>
                           <h3 className="text-base font-semibold text-slate-900">{memberData.name}</h3>
-                          <p className="text-sm text-slate-500">Total {formatDuration(memberData.totalSeconds)}</p>
+                          <p className="text-sm text-slate-500">Total {formatDuration(cardTotalSeconds)}</p>
                         </div>
                         <span
                           className={`rounded-full px-3 py-1 text-xs font-semibold ${
@@ -974,8 +1010,10 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
                         ) : (
                           <p className="text-xs text-slate-500">Now: no active timer</p>
                         )}
-                        <p className="text-xs text-slate-500">
-                          Last worked: {running ? "active now" : formatAgoFromMs(lastActivityMs)}
+                        <p className="text-xs text-slate-600">
+                          <span className="rounded-md bg-fuchsia-100 px-2 py-0.5 font-semibold text-fuchsia-700">
+                            Last worked: {running ? "active now" : formatAgoFromMs(lastActivityMs)}
+                          </span>
                         </p>
                       </div>
                       <div className="mt-3 space-y-2">
@@ -988,10 +1026,11 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
                           return (
                             <div key={item.label}>
                               <div className="mb-1 flex items-center justify-between gap-2 text-xs">
-                                <span className="truncate text-slate-700">{item.label}</span>
+                                <span className="truncate text-slate-700">
+                                  {item.label} | Project: {item.project}
+                                </span>
                                 <span className="font-medium text-slate-900">{formatDuration(item.seconds)}</span>
                               </div>
-                              <p className="mb-1 truncate text-[11px] text-slate-500">Project: {item.project}</p>
                               <div className="h-2 w-full rounded-full bg-slate-200">
                                 <div
                                   className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-sky-400"
@@ -1123,11 +1162,12 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
                               (entry) => `${entry.id}-${new Date(entry.start).getTime()}` === block.id
                             );
                           const colorClass = getProjectColorClass(block.project);
+                          const details = sourceEntry ? getEntryCardDetails(sourceEntry, memberTimeline.name) : null;
                           return (
                             <button
                               key={block.id}
                               type="button"
-                              className={`absolute overflow-hidden rounded-lg border px-2 py-1 text-left shadow-sm ${colorClass}`}
+                              className={`group absolute rounded-lg border px-2 py-1 text-left shadow-sm ${colorClass}`}
                               style={{
                                 top: `${block.topPx}px`,
                                 height: `${block.heightPx}px`,
@@ -1139,9 +1179,31 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
                                 openEntryModal(sourceEntry, memberTimeline.name);
                               }}
                             >
-                              <p className="truncate text-xs font-semibold text-slate-900">{block.title}</p>
-                              <p className="truncate text-[11px] text-slate-700">Project: {block.project}</p>
-                              <p className="truncate text-[11px] text-slate-700">{block.timeRange}</p>
+                              <div className="overflow-hidden">
+                                <p className="truncate text-xs font-semibold text-slate-900">{block.title}</p>
+                                <p className="truncate text-[11px] text-slate-700">Project: {block.project}</p>
+                                <p className="truncate text-[11px] text-slate-700">{block.timeRange}</p>
+                              </div>
+                              {details && (
+                                <div className="pointer-events-none absolute left-full top-0 z-20 ml-2 hidden w-64 rounded-lg border border-slate-200 bg-white p-3 text-left shadow-lg group-hover:block group-focus-visible:block">
+                                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{details.memberName}</p>
+                                  <p className="mt-1 text-sm text-slate-700">
+                                    <span className="font-semibold text-slate-900">Description:</span> {details.description}
+                                  </p>
+                                  <p className="text-sm text-slate-700">
+                                    <span className="font-semibold text-slate-900">Project:</span> {details.project}
+                                  </p>
+                                  <p className="text-sm text-slate-700">
+                                    <span className="font-semibold text-slate-900">Start:</span> {details.start}
+                                  </p>
+                                  <p className="text-sm text-slate-700">
+                                    <span className="font-semibold text-slate-900">End:</span> {details.end}
+                                  </p>
+                                  <p className="text-sm text-slate-700">
+                                    <span className="font-semibold text-slate-900">Duration:</span> {details.duration}
+                                  </p>
+                                </div>
+                              )}
                             </button>
                           );
                         })}
