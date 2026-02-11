@@ -693,7 +693,7 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
   }
 
   return (
-    <div className="space-y-5 rounded-3xl border border-slate-200/70 bg-gradient-to-br from-white via-sky-50/35 to-emerald-50/35 p-2 md:p-2">
+    <div className="space-y-5 rounded-3xl border border-slate-200/70 bg-gradient-to-br from-white via-sky-50/35 to-emerald-50/35 p-3 md:p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
           <button
