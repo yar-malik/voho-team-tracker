@@ -397,6 +397,8 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
   const [lastUpdateMeta, setLastUpdateMeta] = useState<{ at: string; source: "auto" | "manual" | "cached" } | null>(null);
   const forceRefreshRef = useRef(false);
   const refreshSourceRef = useRef<"auto" | "manual" | "cached">("cached");
+  const dayCalendarScrollRef = useRef<HTMLDivElement | null>(null);
+  const allCalendarsScrollRef = useRef<HTMLDivElement | null>(null);
 
   const hasMembers = members.length > 0;
 
@@ -597,6 +599,21 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
     }));
   }, [teamData, date]);
 
+  const nowLineOffsetPx = useMemo(() => {
+    const [yearStr, monthStr, dayStr] = date.split("-");
+    const selected = new Date(Number(yearStr), Number(monthStr) - 1, Number(dayStr));
+    const today = new Date();
+    if (
+      selected.getFullYear() !== today.getFullYear() ||
+      selected.getMonth() !== today.getMonth() ||
+      selected.getDate() !== today.getDate()
+    ) {
+      return null;
+    }
+    const minutesIntoDay = today.getHours() * 60 + today.getMinutes();
+    return (minutesIntoDay / 60) * HOUR_HEIGHT;
+  }, [date]);
+
   const openEntryModal = (entry: TimeEntry, memberName: string) => {
     setSelectedEntry({
       memberName,
@@ -613,6 +630,17 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
     forceRefreshRef.current = true;
     setManualRefreshTick((value) => value + 1);
   };
+
+  useEffect(() => {
+    if (nowLineOffsetPx == null) return;
+    const target = Math.max(0, nowLineOffsetPx - 220);
+    if (mode === "member" && dayCalendarScrollRef.current) {
+      dayCalendarScrollRef.current.scrollTop = target;
+    }
+    if (mode === "all" && allCalendarsScrollRef.current) {
+      allCalendarsScrollRef.current.scrollTop = target;
+    }
+  }, [mode, date, nowLineOffsetPx, timeline.blocks.length, teamTimeline.length]);
 
   useEffect(() => {
     if (!selectedEntry) return;
@@ -665,7 +693,7 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
   }
 
   return (
-    <div className="space-y-6 rounded-3xl border border-slate-200/70 bg-gradient-to-br from-white via-sky-50/35 to-emerald-50/35 p-2 md:p-3">
+    <div className="space-y-5 rounded-3xl border border-slate-200/70 bg-gradient-to-br from-white via-sky-50/35 to-emerald-50/35 p-1 md:p-2">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
           <button
@@ -844,7 +872,7 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
                 <p className="text-sm text-slate-500">No entries for this day.</p>
               )}
               {data.entries.length > 0 && (
-                <div className="overflow-x-auto">
+                <div ref={dayCalendarScrollRef} className="max-h-[72vh] overflow-auto">
                   <div className="grid min-w-[620px] grid-cols-[3.5rem_1fr] gap-2">
                     <div className="relative" style={{ height: `${HOURS_IN_DAY * HOUR_HEIGHT}px` }}>
                       {Array.from({ length: HOURS_IN_DAY + 1 }).map((_, hour) => (
@@ -862,6 +890,14 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
                       className="relative rounded-xl border border-slate-200 bg-slate-50"
                       style={{ height: `${HOURS_IN_DAY * HOUR_HEIGHT}px` }}
                     >
+                      {nowLineOffsetPx != null && (
+                        <div className="pointer-events-none absolute left-0 right-0 z-20" style={{ top: `${nowLineOffsetPx}px` }}>
+                          <div className="border-t-2 border-rose-500/90" />
+                          <span className="absolute -top-2 right-2 rounded bg-rose-500 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                            Now
+                          </span>
+                        </div>
+                      )}
                       {Array.from({ length: HOURS_IN_DAY + 1 }).map((_, hour) => (
                         <div
                           key={hour}
@@ -1156,7 +1192,7 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
             <p className="text-sm text-slate-500">
               One shared daily timeline for everyone. Matching vertical positions indicate overlap.
             </p>
-            <div className="mt-4 overflow-x-auto">
+            <div ref={allCalendarsScrollRef} className="mt-4 max-h-[72vh] overflow-auto">
               <div className="grid min-w-[760px] grid-cols-[3.5rem_1fr] gap-2">
                 <div className="relative" style={{ height: `${HOURS_IN_DAY * HOUR_HEIGHT}px` }}>
                   {Array.from({ length: HOURS_IN_DAY + 1 }).map((_, hour) => (
@@ -1181,6 +1217,11 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
                         className="relative rounded-xl border border-slate-200 bg-slate-50"
                         style={{ height: `${HOURS_IN_DAY * HOUR_HEIGHT}px` }}
                       >
+                        {nowLineOffsetPx != null && (
+                          <div className="pointer-events-none absolute left-0 right-0 z-20" style={{ top: `${nowLineOffsetPx}px` }}>
+                            <div className="border-t-2 border-rose-500/90" />
+                          </div>
+                        )}
                         {Array.from({ length: HOURS_IN_DAY + 1 }).map((_, hour) => (
                           <div
                             key={hour}

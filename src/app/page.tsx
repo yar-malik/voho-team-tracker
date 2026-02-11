@@ -6,7 +6,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-sky-50 via-white to-emerald-50">
-      <main className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-3 py-12 md:px-4">
+      <main className="mx-auto flex w-full max-w-none flex-col gap-8 px-1 py-8 md:px-2">
         <header className="space-y-3">
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-cyan-700">
             Voho Team Overview
