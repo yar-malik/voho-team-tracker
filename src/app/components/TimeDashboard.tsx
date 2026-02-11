@@ -318,6 +318,33 @@ function buildSummary(entries: TimeEntry[]) {
     .sort((a, b) => b.seconds - a.seconds);
 }
 
+function buildTaskProjectSummary(entries: TimeEntry[]) {
+  const totals = new Map<string, { label: string; project: string; seconds: number }>();
+  entries.forEach((entry) => {
+    const label = entry.description?.trim() || "(No description)";
+    const project = entry.project_name?.trim() || "No project";
+    const key = `${project}::${label}`;
+    const existing = totals.get(key);
+    if (existing) {
+      existing.seconds += getEntrySeconds(entry);
+      return;
+    }
+    totals.set(key, { label, project, seconds: getEntrySeconds(entry) });
+  });
+  return Array.from(totals.values()).sort((a, b) => b.seconds - a.seconds);
+}
+
+function formatAgoFromMs(timestampMs: number): string {
+  if (!Number.isFinite(timestampMs)) return "—";
+  const diffMs = Math.max(0, Date.now() - timestampMs);
+  const totalMinutes = Math.floor(diffMs / (60 * 1000));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours <= 0) return `${Math.max(1, minutes)}m ago`;
+  if (minutes === 0) return `${hours}h ago`;
+  return `${hours}h ${minutes}m ago`;
+}
+
 export default function TimeDashboard({ members }: { members: Member[] }) {
   const defaultMember = members[0]?.name ?? "";
   const [member, setMember] = useState(defaultMember);
@@ -917,7 +944,12 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
               <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {teamData.members.map((memberData) => {
                   const running = memberData.entries.find((entry) => entry.duration < 0) ?? null;
-                  const memberSummary = buildSummary(memberData.entries).slice(0, 4);
+                  const memberSummary = buildTaskProjectSummary(memberData.entries).slice(0, 4);
+                  const lastActivityMs = memberData.entries.reduce((latest, entry) => {
+                    const endMs = getEntryEndMs(entry);
+                    if (Number.isNaN(endMs)) return latest;
+                    return Math.max(latest, endMs);
+                  }, Number.NEGATIVE_INFINITY);
                   const maxTaskSeconds = memberSummary[0]?.seconds ?? 0;
                   return (
                     <div key={memberData.name} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -934,6 +966,18 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
                           {running ? "Running" : "Idle"}
                         </span>
                       </div>
+                      <div className="mt-2 space-y-1">
+                        {running ? (
+                          <p className="text-xs text-emerald-700">
+                            Now: {running.description?.trim() || "(No description)"} | Project: {running.project_name?.trim() || "No project"}
+                          </p>
+                        ) : (
+                          <p className="text-xs text-slate-500">Now: no active timer</p>
+                        )}
+                        <p className="text-xs text-slate-500">
+                          Last worked: {running ? "active now" : formatAgoFromMs(lastActivityMs)}
+                        </p>
+                      </div>
                       <div className="mt-3 space-y-2">
                         {memberSummary.length === 0 && (
                           <p className="text-sm text-slate-500">No entries yet.</p>
@@ -947,6 +991,7 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
                                 <span className="truncate text-slate-700">{item.label}</span>
                                 <span className="font-medium text-slate-900">{formatDuration(item.seconds)}</span>
                               </div>
+                              <p className="mb-1 truncate text-[11px] text-slate-500">Project: {item.project}</p>
                               <div className="h-2 w-full rounded-full bg-slate-200">
                                 <div
                                   className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-sky-400"
