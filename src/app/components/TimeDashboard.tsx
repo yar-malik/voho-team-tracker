@@ -73,6 +73,7 @@ const HOUR_HEIGHT = 72;
 const MIN_BLOCK_HEIGHT = 24;
 const RANKING_ENTRY_CAP_SECONDS = 4 * 60 * 60;
 const EXCLUDED_PROJECT_NAME = "non-work-task";
+const AUTO_REFRESH_INTERVAL_MS = 15 * 60 * 1000;
 
 function formatDuration(totalSeconds: number): string {
   const hours = Math.floor(totalSeconds / 3600);
@@ -566,7 +567,7 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
       refreshSourceRef.current = "auto";
       forceRefreshRef.current = true;
       setManualRefreshTick((value) => value + 1);
-    }, 30 * 60 * 1000);
+    }, AUTO_REFRESH_INTERVAL_MS);
 
     return () => window.clearInterval(intervalId);
   }, []);
@@ -1021,8 +1022,8 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
                 Notes
               </h3>
               <p className="mt-2 text-sm text-slate-500">
-                Entries refresh when you change the date or teammate. Data stays on the server, and
-                requests are lightly cached to reduce rate limits.
+                Entries refresh when you change the date or teammate, and also every 15 minutes automatically.
+                Data stays on the server, and requests are lightly cached to reduce rate limits.
               </p>
             </div>
             </div>
