@@ -1144,7 +1144,9 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
                               onMouseLeave={hideHoverTooltip}
                             >
                               <div className="mb-1 flex items-center justify-between gap-2 text-xs">
-                                <span className="truncate text-slate-700">{item.label}</span>
+                                <span className="truncate text-slate-700">
+                                  {item.label} | {item.project}
+                                </span>
                                 <span className="font-medium text-slate-900">{formatDuration(item.seconds)}</span>
                               </div>
                               <div className="h-2 w-full rounded-full bg-slate-200">
