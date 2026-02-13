@@ -1,24 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-
-const PROJECT_COLORS = [
-  "#A5D8FF",
-  "#91A7FF",
-  "#B197FC",
-  "#D0BFFF",
-  "#FCC2D7",
-  "#FFD8A8",
-  "#FFE8A3",
-  "#C3FAE8",
-  "#99E9F2",
-  "#B2F2BB",
-  "#FFD6E0",
-  "#DEE2E6",
-  "#BAC8FF",
-  "#C5F6FA",
-  "#E5DBFF",
-];
+import { DEFAULT_PROJECT_COLOR, PROJECT_PASTEL_HEX } from "@/lib/projectColors";
 
 type Project = {
   key: string;
@@ -40,7 +23,7 @@ function formatHours(totalSeconds: number) {
 }
 
 function normalizeColor(color: string | null | undefined) {
-  return (color || "#0EA5E9").toUpperCase();
+  return (color || DEFAULT_PROJECT_COLOR).toUpperCase();
 }
 
 function ProjectModal({
@@ -104,7 +87,7 @@ function ProjectModal({
           <div>
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Project color</p>
             <div className="inline-grid grid-cols-5 gap-2 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-8">
-              {PROJECT_COLORS.map((color) => {
+              {PROJECT_PASTEL_HEX.map((color) => {
                 const active = selectedColor === color.toUpperCase();
                 return (
                   <button
@@ -158,7 +141,7 @@ export default function ProjectsPageClient({ initialProjects }: { initialProject
           <h1 className="text-3xl font-semibold text-slate-900">Projects</h1>
           <button
             type="button"
-            onClick={() => setCreating({ key: "", name: "", color: "#0EA5E9" })}
+            onClick={() => setCreating({ key: "", name: "", color: DEFAULT_PROJECT_COLOR })}
             className="rounded-xl bg-fuchsia-600 px-4 py-2 text-sm font-semibold text-white hover:bg-fuchsia-500"
           >
             + New project
@@ -196,7 +179,7 @@ export default function ProjectsPageClient({ initialProjects }: { initialProject
               <tr
                 key={project.key}
                 className="cursor-pointer border-b border-slate-100 hover:bg-slate-50"
-                onClick={() => setEditing({ key: project.key, name: project.name, color: project.color || "#0EA5E9" })}
+                onClick={() => setEditing({ key: project.key, name: project.name, color: project.color || DEFAULT_PROJECT_COLOR })}
               >
                 <td className="px-6 py-3">
                   <div className="inline-flex items-center gap-2 text-base font-medium text-slate-900">
@@ -211,7 +194,7 @@ export default function ProjectsPageClient({ initialProjects }: { initialProject
                     type="button"
                     onClick={(event) => {
                       event.stopPropagation();
-                      setEditing({ key: project.key, name: project.name, color: project.color || "#0EA5E9" });
+                      setEditing({ key: project.key, name: project.name, color: project.color || DEFAULT_PROJECT_COLOR });
                     }}
                     aria-label={`Edit ${project.name}`}
                     className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100"
