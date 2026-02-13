@@ -104,6 +104,8 @@ This gives you a solid base for historical charts and deeper analysis.
 
 - Tokens are read on the server only and never sent to the browser.
 - The dashboard queries Toggl's API for the selected teammate and date.
+- Project-name API fan-out is disabled by default to protect Toggl quota.  
+  Set `TOGGL_PROJECT_LOOKUPS=1` only if you explicitly want live project-detail lookups from Toggl.
 
 ## Learn More
 

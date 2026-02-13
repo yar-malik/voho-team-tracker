@@ -193,39 +193,67 @@ export async function GET(request: NextRequest) {
     });
   }
 
+  const storedBeforeRefresh = await readStoredTeam(members, startDate, endDate);
+  const storedMemberByName = new Map<string, MemberPayload>(
+    (storedBeforeRefresh?.members ?? []).map((member) => [member.name, member])
+  );
+
   try {
+    const refreshErrors: string[] = [];
     const results = await Promise.all(
       members.map(async (member) => {
         const token = getTokenForMember(member.name);
         if (!token) {
+          const fallback = storedMemberByName.get(member.name);
+          if (fallback) return fallback;
           return { name: member.name, entries: [], current: null, totalSeconds: 0 };
         }
 
-        const entries = await fetchTimeEntries(token, startDate, endDate);
-        const projectNames = await fetchProjectNames(token, entries);
-        const sortedEntries = sortEntriesByStart(entries).map((entry) => ({
-          ...entry,
-          project_name: getEntryProjectName(entry, projectNames),
-        }));
+        try {
+          const entries = await fetchTimeEntries(token, startDate, endDate);
+          const projectNames = await fetchProjectNames(token, entries);
+          const sortedEntries = sortEntriesByStart(entries).map((entry) => ({
+            ...entry,
+            project_name: getEntryProjectName(entry, projectNames),
+          }));
 
-        const totalSeconds = sortedEntries.reduce((acc, entry) => {
-          if (entry.duration >= 0) return acc + entry.duration;
-          const startedAt = new Date(entry.start).getTime();
-          if (Number.isNaN(startedAt)) return acc;
-          return acc + Math.floor((Date.now() - startedAt) / 1000);
-        }, 0);
+          const totalSeconds = sortedEntries.reduce((acc, entry) => {
+            if (entry.duration >= 0) return acc + entry.duration;
+            const startedAt = new Date(entry.start).getTime();
+            if (Number.isNaN(startedAt)) return acc;
+            return acc + Math.floor((Date.now() - startedAt) / 1000);
+          }, 0);
 
-        await persistHistoricalSnapshot("team", member.name, dateInput, sortedEntries);
-        return { name: member.name, entries: sortedEntries, current: null, totalSeconds };
+          await persistHistoricalSnapshot("team", member.name, dateInput, sortedEntries);
+          return { name: member.name, entries: sortedEntries, current: null, totalSeconds };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Unknown refresh error";
+          refreshErrors.push(`${member.name}: ${message}`);
+          const fallback = storedMemberByName.get(member.name);
+          if (fallback) return fallback;
+          return { name: member.name, entries: [], current: null, totalSeconds: 0 };
+        }
       })
     );
+
+    const warning =
+      refreshErrors.length > 0
+        ? `Partial refresh completed. ${refreshErrors.length} member(s) used stored data: ${refreshErrors.join(" | ")}`
+        : null;
+    const allMembersFailed = refreshErrors.length === members.length;
+    const responseCachedAt =
+      allMembersFailed && storedBeforeRefresh?.cachedAt ? storedBeforeRefresh.cachedAt : new Date().toISOString();
+
+    if (refreshErrors.length > 0) {
+      await persistHistoricalError("team", null, dateInput, warning ?? "Partial refresh used stored data");
+    }
 
     return NextResponse.json({
       date: dateInput,
       members: results,
-      cachedAt: new Date().toISOString(),
-      stale: false,
-      warning: null,
+      cachedAt: responseCachedAt,
+      stale: refreshErrors.length > 0,
+      warning,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";

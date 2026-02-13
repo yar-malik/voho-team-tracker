@@ -19,6 +19,7 @@ export type TogglTimeEntry = {
 
 const TOGGL_API_BASE = "https://api.track.toggl.com/api/v9";
 const PROJECT_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
+const ENABLE_TOGGL_PROJECT_LOOKUPS = process.env.TOGGL_PROJECT_LOOKUPS === "1";
 
 type ProjectCacheValue = {
   name: string;
@@ -208,6 +209,12 @@ export async function fetchProjectNames(
       projectNameCache.set(key, { name, expiresAt: Date.now() + PROJECT_CACHE_TTL_MS });
       uniqueProjects.delete(key);
     }
+  }
+
+  // By default, avoid expensive per-project Toggl calls to protect quota.
+  // Enable only when explicitly needed via env var.
+  if (!ENABLE_TOGGL_PROJECT_LOOKUPS || uniqueProjects.size === 0) {
+    return projectMap;
   }
 
   await Promise.all(
