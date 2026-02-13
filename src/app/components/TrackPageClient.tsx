@@ -914,8 +914,6 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
                         });
                       }
 
-                      setDescription(entryEditor.description);
-                      setProjectName(entryEditor.project);
                       setEntryEditor(null);
                       setRefreshTick((v) => v + 1);
                     } catch (err) {
