@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 function isPublicPath(pathname: string) {
   if (pathname === "/login") return true;
   if (pathname.startsWith("/api/auth/")) return true;
+  if (pathname === "/api/admin/bootstrap-users") return true;
   if (pathname.startsWith("/_next/")) return true;
   if (pathname === "/favicon.ico") return true;
   return false;
@@ -27,4 +28,3 @@ export function middleware(request: NextRequest) {
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };
-
