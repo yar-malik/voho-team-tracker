@@ -98,6 +98,14 @@ function setFaviconHref(href: string) {
     document.head.appendChild(link);
   }
   link.href = href;
+
+  let shortcut = document.querySelector("link[rel='shortcut icon']") as HTMLLinkElement | null;
+  if (!shortcut) {
+    shortcut = document.createElement("link");
+    shortcut.rel = "shortcut icon";
+    document.head.appendChild(shortcut);
+  }
+  shortcut.href = href;
 }
 
 export default function PlatformShell({
