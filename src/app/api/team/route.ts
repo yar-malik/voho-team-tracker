@@ -21,7 +21,7 @@ type TimeEntry = {
 type MemberPayload = {
   name: string;
   entries: TimeEntry[];
-  current: null;
+  current: TimeEntry | null;
   totalSeconds: number;
 };
 
@@ -150,6 +150,13 @@ async function readStoredTeam(
       project_color: projectMeta?.color ?? null,
     };
     bucket.entries.push(entry);
+    if (!row.stop_at) {
+      const currentStart = bucket.current ? new Date(bucket.current.start).getTime() : Number.NEGATIVE_INFINITY;
+      const entryStart = new Date(entry.start).getTime();
+      if (!bucket.current || entryStart > currentStart) {
+        bucket.current = entry;
+      }
+    }
     bucket.totalSeconds += Math.max(0, row.duration_seconds);
   }
 
