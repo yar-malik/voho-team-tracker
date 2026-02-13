@@ -1,18 +1,21 @@
 import TrackPageClient from "@/app/components/TrackPageClient";
 import { getCurrentUserContext } from "@/lib/authorization";
-import { listMemberProfiles } from "@/lib/manualTimeEntriesStore";
+import { getMemberNameByEmail, listMemberProfiles } from "@/lib/manualTimeEntriesStore";
 
 export default async function TrackPage() {
   const context = await getCurrentUserContext();
-  const members = await listMemberProfiles();
+  const memberNameByEmail = context?.email ? await getMemberNameByEmail(context.email) : null;
+  let memberName = memberNameByEmail;
 
-  const byEmail = new Map(
-    members
-      .filter((member) => member.email)
-      .map((member) => [member.email!.trim().toLowerCase(), member.name] as const)
-  );
-
-  const memberName = context?.email ? byEmail.get(context.email.trim().toLowerCase()) ?? null : null;
+  if (!memberName && context?.email) {
+    const members = await listMemberProfiles();
+    const byEmail = new Map(
+      members
+        .filter((member) => member.email)
+        .map((member) => [member.email!.trim().toLowerCase(), member.name] as const)
+    );
+    memberName = byEmail.get(context.email.trim().toLowerCase()) ?? null;
+  }
 
   if (!memberName) {
     return (
