@@ -416,9 +416,11 @@ function getTaskSummaryTooltip(item: TaskProjectSummaryRow) {
 export default function TimeDashboard({
   members,
   initialMode = "all",
+  restrictToMember = null,
 }: {
   members: Member[];
-  initialMode?: "all" | "team";
+  initialMode?: "member" | "all" | "team";
+  restrictToMember?: string | null;
 }) {
   const defaultMember = members[0]?.name ?? "";
   const [member, setMember] = useState(defaultMember);
@@ -443,6 +445,16 @@ export default function TimeDashboard({
   const allCalendarsScrollRef = useRef<HTMLDivElement | null>(null);
 
   const hasMembers = members.length > 0;
+  const isSelfOnly = Boolean(restrictToMember);
+
+  useEffect(() => {
+    if (!restrictToMember) return;
+    const exists = members.some((item) => item.name === restrictToMember);
+    if (exists) {
+      setMember(restrictToMember);
+      setMode("member");
+    }
+  }, [restrictToMember, members]);
 
   useEffect(() => {
     setMode(initialMode);
@@ -736,42 +748,46 @@ export default function TimeDashboard({
   return (
     <div className="space-y-5 rounded-2xl border border-slate-200 bg-white p-4 md:p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            className={`rounded-full border px-4 py-2 text-sm font-semibold ${
-              mode === "all"
-                ? "border-slate-900 bg-slate-900 text-white"
-                : "border-slate-200 bg-white text-slate-600"
-            }`}
-            onClick={() => setMode("all")}
-          >
-            All calendars
-          </button>
-          <button
-            type="button"
-            className={`rounded-full border px-4 py-2 text-sm font-semibold ${
-              mode === "team"
-                ? "border-slate-900 bg-slate-900 text-white"
-                : "border-slate-200 bg-white text-slate-600"
-            }`}
-            onClick={() => setMode("team")}
-          >
-            Team overview
-          </button>
-        </div>
+        {!isSelfOnly ? (
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              className={`rounded-full border px-4 py-2 text-sm font-semibold ${
+                mode === "all"
+                  ? "border-slate-900 bg-slate-900 text-white"
+                  : "border-slate-200 bg-white text-slate-600"
+              }`}
+              onClick={() => setMode("all")}
+            >
+              All calendars
+            </button>
+            <button
+              type="button"
+              className={`rounded-full border px-4 py-2 text-sm font-semibold ${
+                mode === "team"
+                  ? "border-slate-900 bg-slate-900 text-white"
+                  : "border-slate-200 bg-white text-slate-600"
+              }`}
+              onClick={() => setMode("team")}
+            >
+              Team overview
+            </button>
+          </div>
+        ) : (
+          <p className="text-sm font-semibold text-slate-700">Your report dashboard</p>
+        )}
         <p className="text-xs text-slate-500">
           Last updated: {lastUpdateMeta ? `${formatDateTime(lastUpdateMeta.at)} (DB snapshot)` : "—"}
         </p>
       </div>
-      {mode !== "member" && (
+      {!isSelfOnly && mode !== "member" && (
         <p className="text-xs font-medium text-slate-600">
           Tip: Team member names are clickable and open their dedicated profile pages.
         </p>
       )}
 
       <div className="grid gap-4 rounded-2xl border border-slate-200 bg-slate-50/40 p-6 md:grid-cols-4">
-        {mode === "member" && (
+        {mode === "member" && !isSelfOnly && (
           <div className="md:col-span-2">
             <label className="text-sm font-medium text-slate-600">Team member</label>
             <div className="mt-2 flex flex-col gap-2 md:flex-row">
@@ -815,7 +831,7 @@ export default function TimeDashboard({
         )}
       </div>
 
-      {mode === "member" && (
+      {mode === "member" && !isSelfOnly && (
         <div className="rounded-2xl border border-slate-200 bg-slate-50/40 p-6">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-600">
             Saved filters
