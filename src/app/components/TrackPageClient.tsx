@@ -283,7 +283,7 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
   const [modalProjectSearch, setModalProjectSearch] = useState("");
   const [quickDurationInput, setQuickDurationInput] = useState("");
   const [quickDurationMode, setQuickDurationMode] = useState(false);
-  const [zoomLevel, setZoomLevel] = useState(2);
+  const [zoomLevel, setZoomLevel] = useState(ZOOM_LEVELS.length - 1);
   const [calendarDraft, setCalendarDraft] = useState<CalendarDraft | null>(null);
   const [draftDurationMinutes, setDraftDurationMinutes] = useState("60");
   const [entryEditor, setEntryEditor] = useState<EntryEditorState | null>(null);
