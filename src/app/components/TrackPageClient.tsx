@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 
 type TimeEntry = {
   id: number;
@@ -9,6 +9,7 @@ type TimeEntry = {
   stop: string | null;
   duration: number;
   project_name?: string | null;
+  project_color?: string | null;
 };
 
 type EntriesResponse = {
@@ -147,6 +148,7 @@ function buildCalendarBlock(entry: TimeEntry, dayStartMs: number) {
     height: (durationMinutes / 60) * CALENDAR_HOUR_HEIGHT,
     description: entry.description?.trim() || "(No description)",
     project: entry.project_name?.trim() || "No project",
+    projectColor: entry.project_color?.trim() || null,
     timeRange: `${formatClock(entry.start)} - ${formatClock(entry.stop)}`,
     startIso: entry.start,
     stopIso: entry.stop,
@@ -154,10 +156,47 @@ function buildCalendarBlock(entry: TimeEntry, dayStartMs: number) {
   };
 }
 
-function projectColorClass(project: string) {
-  const key = project.trim().toLowerCase();
-  if (key === "no project") return "border-slate-200 bg-slate-100";
-  return "border-sky-200 bg-sky-100/70";
+function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
+  const normalized = hex.trim();
+  if (!/^#[0-9a-fA-F]{6}$/.test(normalized)) return null;
+  const r = Number.parseInt(normalized.slice(1, 3), 16);
+  const g = Number.parseInt(normalized.slice(3, 5), 16);
+  const b = Number.parseInt(normalized.slice(5, 7), 16);
+  return { r, g, b };
+}
+
+function getPastelProjectStyle(project: string, projectColor: string | null | undefined): CSSProperties {
+  const rgb = projectColor ? hexToRgb(projectColor) : null;
+  if (rgb) {
+    return {
+      borderColor: `rgb(${rgb.r} ${rgb.g} ${rgb.b} / 0.75)`,
+      backgroundColor: `rgb(${rgb.r} ${rgb.g} ${rgb.b} / 0.20)`,
+    };
+  }
+
+  if (project.trim().toLowerCase() === "no project") {
+    return {
+      borderColor: "rgb(203 213 225 / 0.8)",
+      backgroundColor: "rgb(241 245 249 / 0.9)",
+    };
+  }
+
+  const fallback = [
+    { border: "rgb(167 139 250 / 0.72)", bg: "rgb(237 233 254 / 0.90)" }, // lavender
+    { border: "rgb(96 165 250 / 0.72)", bg: "rgb(219 234 254 / 0.90)" }, // sky
+    { border: "rgb(45 212 191 / 0.72)", bg: "rgb(204 251 241 / 0.90)" }, // mint
+    { border: "rgb(249 168 212 / 0.72)", bg: "rgb(252 231 243 / 0.92)" }, // rose
+    { border: "rgb(251 191 36 / 0.72)", bg: "rgb(254 243 199 / 0.92)" }, // amber
+    { border: "rgb(134 239 172 / 0.72)", bg: "rgb(220 252 231 / 0.92)" }, // green
+    { border: "rgb(147 197 253 / 0.72)", bg: "rgb(224 242 254 / 0.92)" }, // cyan
+  ];
+
+  let hash = 0;
+  for (let i = 0; i < project.length; i += 1) {
+    hash = (hash * 31 + project.charCodeAt(i)) >>> 0;
+  }
+  const color = fallback[hash % fallback.length];
+  return { borderColor: color.border, backgroundColor: color.bg };
 }
 
 export default function TrackPageClient({ memberName }: { memberName: string }) {
@@ -555,8 +594,12 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
                       error: null,
                     })
                   }
-                  className={`absolute left-24 right-8 overflow-hidden rounded-lg border px-2 py-1 text-left text-xs shadow-sm ${projectColorClass(block.project)}`}
-                  style={{ top: `${block.top}px`, height: `${Math.max(22, block.height)}px` }}
+                  className="absolute left-24 right-8 overflow-hidden rounded-lg border px-2 py-1 text-left text-xs shadow-sm"
+                  style={{
+                    top: `${block.top}px`,
+                    height: `${Math.max(22, block.height)}px`,
+                    ...getPastelProjectStyle(block.project, block.projectColor),
+                  }}
                 >
                   <p className="truncate font-semibold text-slate-900">{block.description}</p>
                   <p className="truncate text-slate-700">{block.project}</p>
