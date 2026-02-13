@@ -441,7 +441,7 @@ export default function MemberProfilePageClient({
           <section id="track" className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-700">Live Tracker</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Live Tracker</p>
                 <h1 className="text-2xl font-semibold text-slate-900 md:text-3xl">{memberName}</h1>
                 <p className="text-sm text-slate-600">{formatDatePretty(date)}</p>
               </div>
@@ -520,8 +520,8 @@ export default function MemberProfilePageClient({
               </div>
 
               {calendarDraft && (
-                <div className="mb-3 rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-sm">
-                  <p className="font-medium text-cyan-800">
+                <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+                  <p className="font-medium text-slate-800">
                     Draft at {String(calendarDraft.hour).padStart(2, "0")}:{String(calendarDraft.minute).padStart(2, "0")}
                   </p>
                   <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -570,7 +570,7 @@ export default function MemberProfilePageClient({
                   {calendarBlocks.map((block) => (
                     <div
                       key={block.id}
-                      className="absolute left-24 right-3 overflow-hidden rounded-lg border border-cyan-200 bg-cyan-100/90 px-2 py-1 text-xs shadow-sm"
+                      className="absolute left-24 right-3 overflow-hidden rounded-lg border border-slate-200 bg-slate-100 px-2 py-1 text-xs shadow-sm"
                       style={{ top: `${block.top}px`, height: `${Math.max(22, block.height)}px` }}
                       title={block.timeRange}
                     >

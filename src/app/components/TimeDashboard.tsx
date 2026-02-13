@@ -782,15 +782,15 @@ export default function TimeDashboard({
   }
 
   return (
-    <div className="space-y-5 rounded-3xl border border-slate-200/70 bg-[#EDFDF5] p-3 md:p-4">
+    <div className="space-y-5 rounded-2xl border border-slate-200 bg-white p-4 md:p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
-            className={`rounded-full px-4 py-2 text-sm font-semibold ${
+            className={`rounded-full border px-4 py-2 text-sm font-semibold ${
               mode === "all"
-                ? "border border-sky-300 bg-sky-100 text-sky-900"
-                : "bg-white text-slate-600 border border-slate-200"
+                ? "border-slate-900 bg-slate-900 text-white"
+                : "border-slate-200 bg-white text-slate-600"
             }`}
             onClick={() => setMode("all")}
           >
@@ -798,10 +798,10 @@ export default function TimeDashboard({
           </button>
           <button
             type="button"
-            className={`rounded-full px-4 py-2 text-sm font-semibold ${
+            className={`rounded-full border px-4 py-2 text-sm font-semibold ${
               mode === "team"
-                ? "border border-emerald-300 bg-emerald-100 text-emerald-900"
-                : "bg-white text-slate-600 border border-slate-200"
+                ? "border-slate-900 bg-slate-900 text-white"
+                : "border-slate-200 bg-white text-slate-600"
             }`}
             onClick={() => setMode("team")}
           >
@@ -811,7 +811,7 @@ export default function TimeDashboard({
         <div className="flex flex-col items-end gap-1">
           <button
             type="button"
-            className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-sky-300"
+            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
             onClick={handleManualRefresh}
             disabled={refreshDisabled}
           >
@@ -832,12 +832,12 @@ export default function TimeDashboard({
         </div>
       )}
       {mode !== "member" && (
-        <p className="text-xs font-medium text-sky-800">
+        <p className="text-xs font-medium text-slate-600">
           Tip: Team member names are clickable and open their dedicated profile pages.
         </p>
       )}
 
-      <div className="grid gap-4 rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-sky-50/40 p-6 shadow-sm md:grid-cols-4">
+      <div className="grid gap-4 rounded-2xl border border-slate-200 bg-slate-50/40 p-6 md:grid-cols-4">
         {mode === "member" && (
           <div className="md:col-span-2">
             <label className="text-sm font-medium text-slate-600">Team member</label>
@@ -873,7 +873,7 @@ export default function TimeDashboard({
           />
         </div>
         {mode === "member" && (
-          <div className="flex flex-col justify-between rounded-xl border border-sky-200 bg-sky-50/70 px-4 py-3">
+          <div className="flex flex-col justify-between rounded-xl border border-slate-200 bg-white px-4 py-3">
             <span className="text-xs uppercase tracking-wide text-slate-500">Total logged</span>
             <span className="text-2xl font-semibold text-slate-900">
               {data ? formatDuration(data.totalSeconds) : "—"}
@@ -883,7 +883,7 @@ export default function TimeDashboard({
       </div>
 
       {mode === "member" && (
-        <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-emerald-50/35 p-6 shadow-sm">
+        <div className="rounded-2xl border border-slate-200 bg-slate-50/40 p-6">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-600">
             Saved filters
           </h2>
@@ -892,7 +892,7 @@ export default function TimeDashboard({
               <span className="text-sm text-slate-500">No saved filters yet.</span>
             )}
             {savedFilters.map((item) => (
-              <div key={item.id} className="flex items-center gap-2 rounded-full bg-sky-100/70 px-3 py-1">
+              <div key={item.id} className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1">
                 <button
                   type="button"
                   className="text-sm font-medium text-slate-700"
@@ -920,7 +920,7 @@ export default function TimeDashboard({
             />
             <button
               type="button"
-              className="rounded-xl bg-cyan-700 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-800"
+              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
               onClick={handleSaveFilter}
             >
               Save current view
