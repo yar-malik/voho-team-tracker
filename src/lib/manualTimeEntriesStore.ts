@@ -707,6 +707,63 @@ export async function stopManualTimer(input: { memberName: string; tzOffsetMinut
   };
 }
 
+export async function updateRunningEntryMetadata(input: {
+  memberName: string;
+  description: string | null;
+  projectName: string | null;
+}) {
+  if (!isSupabaseConfigured()) {
+    throw new Error("Supabase history is not configured");
+  }
+
+  const running = await getRunningEntry(input.memberName);
+  if (!running) {
+    return null;
+  }
+
+  await ensureMember(input.memberName);
+  const { projectKey, projectName } = await ensureManualProject(input.projectName);
+  const nowIso = new Date().toISOString();
+
+  const response = await fetch(`${getBaseUrl()}/rest/v1/time_entries?toggl_entry_id=eq.${running.id}`, {
+    method: "PATCH",
+    headers: {
+      ...supabaseHeaders(),
+      Prefer: "return=representation",
+    },
+    body: JSON.stringify({
+      project_key: projectKey,
+      description: normalizeDescription(input.description),
+      synced_at: nowIso,
+      raw: {
+        source: "manual",
+        action: "running_metadata_update",
+        edited_at: nowIso,
+      },
+    }),
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    throw new Error("Failed to update running entry");
+  }
+
+  const rows = (await response.json()) as StoredEntryRow[];
+  const updated = rows[0];
+  if (!updated) {
+    throw new Error("Running entry update returned no row");
+  }
+
+  return {
+    id: updated.toggl_entry_id,
+    member: updated.member_name,
+    description: updated.description,
+    projectName,
+    startAt: updated.start_at,
+    durationSeconds: Math.max(0, updated.duration_seconds),
+    source: updated.entry_source || "manual",
+  } satisfies RunningEntry;
+}
+
 export async function createManualTimeEntry(input: {
   memberName: string;
   description: string | null;
