@@ -107,6 +107,8 @@ export async function persistHistoricalSnapshot(
 
     return {
       toggl_entry_id: entry.id,
+      entry_source: "toggl",
+      source_entry_id: String(entry.id),
       member_name: memberName,
       project_key: projectKey,
       description: entry.description,

@@ -42,8 +42,12 @@ create table if not exists public.projects (
 create unique index if not exists idx_projects_workspace_project
   on public.projects (workspace_id, project_id);
 
+create sequence if not exists public.time_entries_id_seq;
+
 create table if not exists public.time_entries (
-  toggl_entry_id bigint primary key,
+  toggl_entry_id bigint primary key default nextval('public.time_entries_id_seq'),
+  entry_source text not null default 'toggl',
+  source_entry_id text null,
   member_name text not null references public.members(member_name) on update cascade,
   project_key text null references public.projects(project_key) on update cascade,
   description text null,
@@ -65,6 +69,13 @@ create index if not exists idx_time_entries_source_date
 
 create index if not exists idx_time_entries_project_key
   on public.time_entries (project_key);
+
+create index if not exists idx_time_entries_entry_source
+  on public.time_entries (entry_source);
+
+create unique index if not exists idx_time_entries_source_unique
+  on public.time_entries (entry_source, source_entry_id)
+  where source_entry_id is not null;
 
 create table if not exists public.daily_member_stats (
   stat_date date not null,

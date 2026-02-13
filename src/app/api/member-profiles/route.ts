@@ -69,6 +69,12 @@ type StoredTimeEntryRow = {
   synced_at: string;
 };
 
+const KPI_CACHE_TTL_MS = 10 * 60 * 1000;
+const KPI_FETCH_TIMEOUT_MS = 1800;
+
+let kpiOverridesCache: { expiresAt: number; value: Map<string, KpiItem[]> } | null = null;
+let kpiOverridesInFlight: Promise<Map<string, KpiItem[]>> | null = null;
+
 function isSupabaseConfigured() {
   return Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
 }
@@ -160,13 +166,19 @@ function parseCsvLine(line: string): string[] {
   return values;
 }
 
-async function fetchKpiOverridesFromCsv(): Promise<Map<string, KpiItem[]>> {
+async function fetchKpiOverridesFromCsvRemote(): Promise<Map<string, KpiItem[]> | null> {
   const url = resolveKpiCsvUrl();
   if (!url) return new Map();
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), KPI_FETCH_TIMEOUT_MS);
+
   try {
-    const response = await fetch(url, { cache: "no-store" });
-    if (!response.ok) return new Map();
+    const response = await fetch(url, {
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    if (!response.ok) return null;
     const text = await response.text();
     const lines = text
       .split(/\r?\n/)
@@ -179,7 +191,7 @@ async function fetchKpiOverridesFromCsv(): Promise<Map<string, KpiItem[]>> {
       const name = column.trim().toLowerCase();
       return name === "member" || name === "name" || name === "teammate";
     });
-    if (memberColumnIndex < 0) return new Map();
+    if (memberColumnIndex < 0) return null;
 
     const map = new Map<string, KpiItem[]>();
     for (let i = 1; i < lines.length; i += 1) {
@@ -201,8 +213,36 @@ async function fetchKpiOverridesFromCsv(): Promise<Map<string, KpiItem[]>> {
     }
     return map;
   } catch {
-    return new Map();
+    return null;
+  } finally {
+    clearTimeout(timeout);
   }
+}
+
+async function fetchKpiOverridesFromCsv(): Promise<Map<string, KpiItem[]>> {
+  const now = Date.now();
+  if (kpiOverridesCache && now < kpiOverridesCache.expiresAt) {
+    return kpiOverridesCache.value;
+  }
+  if (kpiOverridesInFlight) {
+    return kpiOverridesInFlight;
+  }
+
+  kpiOverridesInFlight = (async () => {
+    const fresh = await fetchKpiOverridesFromCsvRemote();
+    if (fresh) {
+      kpiOverridesCache = {
+        value: fresh,
+        expiresAt: Date.now() + KPI_CACHE_TTL_MS,
+      };
+      return fresh;
+    }
+    return kpiOverridesCache?.value ?? new Map();
+  })().finally(() => {
+    kpiOverridesInFlight = null;
+  });
+
+  return kpiOverridesInFlight;
 }
 
 function resolveKpiCsvUrl(): string | null {
@@ -543,10 +583,13 @@ export async function GET(request: NextRequest) {
 
   const range = buildUtcRangeFromLocalDates(startDate, endDate, tzOffsetMinutes);
   const aiEnabled = Boolean(process.env.OPENAI_API_KEY);
-  const kpiOverrides = await fetchKpiOverridesFromCsv();
+  const kpiOverridesPromise = fetchKpiOverridesFromCsv();
 
   if (!forceRefresh) {
-    const stored = await readStoredEntries(members, range.startIso, range.endIso);
+    const [stored, kpiOverrides] = await Promise.all([
+      readStoredEntries(members, range.startIso, range.endIso),
+      kpiOverridesPromise,
+    ]);
     if (stored.entries.length === 0) {
       return NextResponse.json({
         startDate,
@@ -588,7 +631,10 @@ export async function GET(request: NextRequest) {
 
   const quotaLock = await getQuotaLockState();
   if (quotaLock.active) {
-    const stored = await readStoredEntries(members, range.startIso, range.endIso);
+    const [stored, kpiOverrides] = await Promise.all([
+      readStoredEntries(members, range.startIso, range.endIso),
+      kpiOverridesPromise,
+    ]);
     const profiles =
       stored.entries.length > 0
         ? buildProfilesFromEntries(members, stored.entries, weekDates, tzOffsetMinutes, kpiOverrides)
@@ -657,6 +703,7 @@ export async function GET(request: NextRequest) {
     );
 
     const mergedEntries = entriesForProfiles.flat();
+    const kpiOverrides = await kpiOverridesPromise;
     const profiles = buildProfilesFromEntries(members, mergedEntries, weekDates, tzOffsetMinutes, kpiOverrides);
 
     let aiWarning: string | null = null;
@@ -711,7 +758,10 @@ export async function GET(request: NextRequest) {
       });
     }
     await persistHistoricalError("team", memberParam || null, endDate, message);
-    const stored = await readStoredEntries(members, range.startIso, range.endIso);
+    const [stored, kpiOverrides] = await Promise.all([
+      readStoredEntries(members, range.startIso, range.endIso),
+      kpiOverridesPromise,
+    ]);
     if (stored.entries.length > 0) {
       const profiles = buildProfilesFromEntries(members, stored.entries, weekDates, tzOffsetMinutes, kpiOverrides);
       return NextResponse.json({

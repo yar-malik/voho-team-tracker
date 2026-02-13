@@ -34,6 +34,20 @@ type MemberProfileResponse = {
   retryAfterSeconds?: number;
 };
 
+type CurrentTimerResponse = {
+  member: string;
+  current: {
+    id: number;
+    member: string;
+    description: string | null;
+    projectName: string | null;
+    startAt: string;
+    durationSeconds: number;
+    source: string;
+  } | null;
+  error?: string;
+};
+
 const AUTO_REFRESH_INTERVAL_MS = 15 * 60 * 1000;
 
 function formatDuration(totalSeconds: number): string {
@@ -75,6 +89,49 @@ export default function MemberProfilePageClient({
   const forceRefreshRef = useRef(false);
   const [cooldownUntilMs, setCooldownUntilMs] = useState<number | null>(null);
   const [cooldownNowMs, setCooldownNowMs] = useState(0);
+  const [timerCurrent, setTimerCurrent] = useState<CurrentTimerResponse["current"]>(null);
+  const [timerError, setTimerError] = useState<string | null>(null);
+  const [timerBusy, setTimerBusy] = useState(false);
+  const [timerNowMs, setTimerNowMs] = useState(1);
+  const [timerDescription, setTimerDescription] = useState("");
+  const [timerProject, setTimerProject] = useState("");
+  const [manualStartAt, setManualStartAt] = useState("");
+  const [manualDurationMinutes, setManualDurationMinutes] = useState("30");
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      if (!timerCurrent) return;
+      setTimerNowMs(Date.now());
+    }, 1000);
+    return () => window.clearInterval(interval);
+  }, [timerCurrent]);
+
+  useEffect(() => {
+    let active = true;
+    fetch(`/api/time-entries/current?member=${encodeURIComponent(memberName)}&_req=${Date.now()}`, {
+      cache: "no-store",
+    })
+      .then(async (res) => {
+        const data = (await res.json()) as CurrentTimerResponse;
+        if (!res.ok || data.error) {
+          throw new Error(data.error || "Failed to load current timer");
+        }
+        return data;
+      })
+      .then((data) => {
+        if (!active) return;
+        setTimerCurrent(data.current);
+        setTimerError(null);
+      })
+      .catch((err: Error) => {
+        if (!active) return;
+        setTimerCurrent(null);
+        setTimerError(err.message);
+      });
+    return () => {
+      active = false;
+    };
+  }, [memberName, refreshTick]);
 
   useEffect(() => {
     let active = true;
@@ -144,6 +201,12 @@ export default function MemberProfilePageClient({
     if (!profile) return 1;
     return profile.days.reduce((max, day) => Math.max(max, day.seconds), 1);
   }, [profile]);
+  const runningSeconds = useMemo(() => {
+    if (!timerCurrent) return 0;
+    const startedAtMs = new Date(timerCurrent.startAt).getTime();
+    if (Number.isNaN(startedAtMs)) return Math.max(0, timerCurrent.durationSeconds);
+    return Math.max(0, Math.floor((timerNowMs - startedAtMs) / 1000));
+  }, [timerCurrent, timerNowMs]);
 
   return (
     <div className="min-h-screen bg-[#EDFDF5]">
@@ -192,6 +255,149 @@ export default function MemberProfilePageClient({
               {cooldownRemainingSeconds % 60}s.
             </p>
           )}
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="text-sm font-semibold text-slate-800">Manual timer (Supabase)</h2>
+          <p className="mt-1 text-xs text-slate-500">Use this to track directly in your database without Toggl calls.</p>
+
+          {timerCurrent ? (
+            <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+              Running: {timerCurrent.projectName || "No project"} | {timerCurrent.description || "(No description)"} |{" "}
+              {formatDuration(runningSeconds)}
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-slate-600">No running manual timer.</p>
+          )}
+          {timerError && <p className="mt-2 text-xs text-rose-700">{timerError}</p>}
+
+          <div className="mt-3 grid gap-2 md:grid-cols-2">
+            <input
+              type="text"
+              value={timerProject}
+              onChange={(event) => setTimerProject(event.target.value)}
+              placeholder="Project name"
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
+            />
+            <input
+              type="text"
+              value={timerDescription}
+              onChange={(event) => setTimerDescription(event.target.value)}
+              placeholder="Description"
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
+            />
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={timerBusy || Boolean(timerCurrent)}
+              onClick={() => {
+                setTimerBusy(true);
+                setTimerError(null);
+                fetch("/api/time-entries/start", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    member: memberName,
+                    description: timerDescription,
+                    project: timerProject,
+                    tzOffset: new Date().getTimezoneOffset(),
+                  }),
+                })
+                  .then(async (res) => {
+                    const data = (await res.json()) as { error?: string };
+                    if (!res.ok || data.error) throw new Error(data.error || "Failed to start timer");
+                    setRefreshTick((value) => value + 1);
+                  })
+                  .catch((err: Error) => setTimerError(err.message))
+                  .finally(() => setTimerBusy(false));
+              }}
+              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-emerald-300"
+            >
+              Start timer
+            </button>
+            <button
+              type="button"
+              disabled={timerBusy || !timerCurrent}
+              onClick={() => {
+                setTimerBusy(true);
+                setTimerError(null);
+                fetch("/api/time-entries/stop", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    member: memberName,
+                    tzOffset: new Date().getTimezoneOffset(),
+                  }),
+                })
+                  .then(async (res) => {
+                    const data = (await res.json()) as { error?: string };
+                    if (!res.ok || data.error) throw new Error(data.error || "Failed to stop timer");
+                    setRefreshTick((value) => value + 1);
+                  })
+                  .catch((err: Error) => setTimerError(err.message))
+                  .finally(() => setTimerBusy(false));
+              }}
+              className="rounded-lg bg-slate-700 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+            >
+              Stop timer
+            </button>
+          </div>
+
+          <div className="mt-4 grid gap-2 md:grid-cols-[1fr_140px_auto]">
+            <input
+              type="datetime-local"
+              value={manualStartAt}
+              onChange={(event) => setManualStartAt(event.target.value)}
+              placeholder="Select start date/time"
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
+            />
+            <input
+              type="number"
+              min={1}
+              value={manualDurationMinutes}
+              onChange={(event) => setManualDurationMinutes(event.target.value)}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
+              placeholder="Minutes"
+            />
+            <button
+              type="button"
+              disabled={timerBusy}
+              onClick={() => {
+                const startAtDate = new Date(manualStartAt);
+                if (Number.isNaN(startAtDate.getTime())) {
+                  setTimerError("Invalid manual start date/time");
+                  return;
+                }
+                const startAtIso = startAtDate.toISOString();
+                setTimerBusy(true);
+                setTimerError(null);
+                fetch("/api/time-entries/manual", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    member: memberName,
+                    description: timerDescription,
+                    project: timerProject,
+                    startAt: startAtIso,
+                    durationMinutes: Number(manualDurationMinutes),
+                    tzOffset: new Date().getTimezoneOffset(),
+                  }),
+                })
+                  .then(async (res) => {
+                    const data = (await res.json()) as { error?: string };
+                    if (!res.ok || data.error) throw new Error(data.error || "Failed to add manual entry");
+                    setRefreshTick((value) => value + 1);
+                  })
+                  .catch((err: Error) => setTimerError(err.message))
+                  .finally(() => setTimerBusy(false));
+              }}
+              className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-sky-300"
+            >
+              Add manual entry
+            </button>
+          </div>
         </div>
 
         {!payload && !error && (
