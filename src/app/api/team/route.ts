@@ -8,6 +8,7 @@ import {
   sortEntriesByStart,
 } from "@/lib/toggl";
 import { persistHistoricalError, persistHistoricalSnapshot } from "@/lib/historyStore";
+import { getQuotaLockState, setQuotaLock } from "@/lib/quotaLockStore";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -60,6 +61,13 @@ function buildUtcDayRange(dateInput: string, tzOffsetMinutes: number) {
   const startMs = Date.UTC(year, month, day, 0, 0, 0, 0) + tzOffsetMinutes * 60 * 1000;
   const endMs = Date.UTC(year, month, day, 23, 59, 59, 999) + tzOffsetMinutes * 60 * 1000;
   return { startDate: new Date(startMs).toISOString(), endDate: new Date(endMs).toISOString() };
+}
+
+function parseRetryAfterSeconds(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return Math.ceil(parsed);
 }
 
 async function readStoredTeam(
@@ -182,6 +190,9 @@ export async function GET(request: NextRequest) {
         cachedAt: stored.cachedAt,
         stale: true,
         warning: "No stored team entries for this day yet. Click Refresh now to import and save from Toggl.",
+        source: "db",
+        cooldownActive: false,
+        retryAfterSeconds: 0,
       });
     }
     return NextResponse.json({
@@ -190,6 +201,24 @@ export async function GET(request: NextRequest) {
       cachedAt: stored.cachedAt,
       stale: false,
       warning: null,
+      source: "db",
+      cooldownActive: false,
+      retryAfterSeconds: 0,
+    });
+  }
+
+  const quotaLock = await getQuotaLockState();
+  if (quotaLock.active) {
+    const stored = await readStoredTeam(members, startDate, endDate);
+    return NextResponse.json({
+      date: dateInput,
+      members: stored?.members ?? members.map((member) => ({ name: member.name, entries: [], current: null, totalSeconds: 0 })),
+      cachedAt: stored?.cachedAt ?? new Date().toISOString(),
+      stale: true,
+      warning: "Toggl quota cooldown active. Showing stored data from Supabase.",
+      source: "db_fallback",
+      cooldownActive: true,
+      retryAfterSeconds: quotaLock.retryAfterSeconds,
     });
   }
 
@@ -254,12 +283,32 @@ export async function GET(request: NextRequest) {
       cachedAt: responseCachedAt,
       stale: refreshErrors.length > 0,
       warning,
+      source: refreshErrors.length > 0 ? "db_fallback" : "toggl_sync",
+      cooldownActive: false,
+      retryAfterSeconds: 0,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     const status = (error as Error & { status?: number }).status ?? 502;
+    const retryAfterSeconds = parseRetryAfterSeconds((error as Error & { retryAfter?: string | null }).retryAfter ?? null);
     const quotaRemaining = (error as Error & { quotaRemaining?: string | null }).quotaRemaining ?? null;
     const quotaResetsIn = (error as Error & { quotaResetsIn?: string | null }).quotaResetsIn ?? null;
+
+    if (status === 402) {
+      await setQuotaLock({
+        status,
+        lockForSeconds: retryAfterSeconds ?? 60 * 60,
+        retryHintSeconds: retryAfterSeconds ?? null,
+        reason: "Toggl 402 quota reached",
+      });
+    } else if (status === 429) {
+      await setQuotaLock({
+        status,
+        lockForSeconds: retryAfterSeconds ?? 5 * 60,
+        retryHintSeconds: retryAfterSeconds ?? null,
+        reason: "Toggl 429 rate limited",
+      });
+    }
 
     const stored = await readStoredTeam(members, startDate, endDate);
     if (stored) {
@@ -272,6 +321,9 @@ export async function GET(request: NextRequest) {
         warning: "Toggl refresh failed. Showing stored team data from Supabase.",
         quotaRemaining,
         quotaResetsIn,
+        source: "db_fallback",
+        cooldownActive: status === 402 || status === 429,
+        retryAfterSeconds: retryAfterSeconds ?? 0,
       });
     }
 

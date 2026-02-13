@@ -7,6 +7,7 @@ import {
   getTokenForMember,
 } from "@/lib/toggl";
 import { persistHistoricalError, persistHistoricalSnapshot } from "@/lib/historyStore";
+import { getQuotaLockState, setQuotaLock } from "@/lib/quotaLockStore";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -250,6 +251,13 @@ function buildUtcRangeFromLocalDates(startDate: string, endDate: string, tzOffse
   const startMs = Date.UTC(sy, sm - 1, sd, 0, 0, 0, 0) + tzOffsetMinutes * 60 * 1000;
   const endMs = Date.UTC(ey, em - 1, ed, 23, 59, 59, 999) + tzOffsetMinutes * 60 * 1000;
   return { startIso: new Date(startMs).toISOString(), endIso: new Date(endMs).toISOString() };
+}
+
+function parseRetryAfterSeconds(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return Math.ceil(parsed);
 }
 
 function getDateKeyAtOffset(iso: string, tzOffsetMinutes: number) {
@@ -550,6 +558,9 @@ export async function GET(request: NextRequest) {
         warning: "No stored history yet. Click Refresh now once to import and save this range.",
         aiEnabled,
         aiWarning: null,
+        source: "db",
+        cooldownActive: false,
+        retryAfterSeconds: 0,
       });
     }
 
@@ -569,6 +580,32 @@ export async function GET(request: NextRequest) {
       warning: null,
       aiEnabled,
       aiWarning: aiEnabled ? "AI analysis is generated on manual refresh to avoid unnecessary API usage." : null,
+      source: "db",
+      cooldownActive: false,
+      retryAfterSeconds: 0,
+    });
+  }
+
+  const quotaLock = await getQuotaLockState();
+  if (quotaLock.active) {
+    const stored = await readStoredEntries(members, range.startIso, range.endIso);
+    const profiles =
+      stored.entries.length > 0
+        ? buildProfilesFromEntries(members, stored.entries, weekDates, tzOffsetMinutes, kpiOverrides)
+        : members.map((member) => createEmptyProfile(member.name, weekDates));
+    return NextResponse.json({
+      startDate,
+      endDate,
+      weekDates,
+      members: profiles,
+      cachedAt: stored.latestSyncedAt ?? new Date().toISOString(),
+      stale: true,
+      warning: "Toggl quota cooldown active. Showing stored data from Supabase.",
+      aiEnabled,
+      aiWarning: aiEnabled ? "AI analysis is generated on manual refresh to avoid unnecessary API usage." : null,
+      source: "db_fallback",
+      cooldownActive: true,
+      retryAfterSeconds: quotaLock.retryAfterSeconds,
     });
   }
 
@@ -650,11 +687,48 @@ export async function GET(request: NextRequest) {
       aiWarning,
       stale: false,
       warning: null,
+      source: "toggl_sync",
+      cooldownActive: false,
+      retryAfterSeconds: 0,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     const status = (error as Error & { status?: number }).status ?? 502;
+    const retryAfterSeconds = parseRetryAfterSeconds((error as Error & { retryAfter?: string | null }).retryAfter ?? null);
+    if (status === 402) {
+      await setQuotaLock({
+        status,
+        lockForSeconds: retryAfterSeconds ?? 60 * 60,
+        retryHintSeconds: retryAfterSeconds ?? null,
+        reason: "Toggl 402 quota reached",
+      });
+    } else if (status === 429) {
+      await setQuotaLock({
+        status,
+        lockForSeconds: retryAfterSeconds ?? 5 * 60,
+        retryHintSeconds: retryAfterSeconds ?? null,
+        reason: "Toggl 429 rate limited",
+      });
+    }
     await persistHistoricalError("team", memberParam || null, endDate, message);
+    const stored = await readStoredEntries(members, range.startIso, range.endIso);
+    if (stored.entries.length > 0) {
+      const profiles = buildProfilesFromEntries(members, stored.entries, weekDates, tzOffsetMinutes, kpiOverrides);
+      return NextResponse.json({
+        startDate,
+        endDate,
+        weekDates,
+        members: profiles,
+        cachedAt: stored.latestSyncedAt ?? new Date().toISOString(),
+        stale: true,
+        warning: "Toggl refresh failed. Showing stored data from Supabase.",
+        aiEnabled,
+        aiWarning: aiEnabled ? "AI analysis is generated on manual refresh to avoid unnecessary API usage." : null,
+        source: "db_fallback",
+        cooldownActive: status === 402 || status === 429,
+        retryAfterSeconds: retryAfterSeconds ?? 0,
+      });
+    }
     return NextResponse.json({ error: message }, { status: status >= 400 ? status : 502 });
   }
 }

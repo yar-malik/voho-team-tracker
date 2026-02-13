@@ -28,6 +28,9 @@ type EntriesResponse = {
   retryAfter?: string | null;
   quotaRemaining?: string | null;
   quotaResetsIn?: string | null;
+  source?: "db" | "toggl_sync" | "db_fallback";
+  cooldownActive?: boolean;
+  retryAfterSeconds?: number;
 };
 
 type TeamResponse = {
@@ -40,6 +43,9 @@ type TeamResponse = {
   retryAfter?: string | null;
   quotaRemaining?: string | null;
   quotaResetsIn?: string | null;
+  source?: "db" | "toggl_sync" | "db_fallback";
+  cooldownActive?: boolean;
+  retryAfterSeconds?: number;
 };
 
 type TeamWeekResponse = {
@@ -58,6 +64,9 @@ type TeamWeekResponse = {
   error?: string;
   quotaRemaining?: string | null;
   quotaResetsIn?: string | null;
+  source?: "db" | "toggl_sync" | "db_fallback";
+  cooldownActive?: boolean;
+  retryAfterSeconds?: number;
 };
 
 type SavedFilter = {
@@ -408,7 +417,13 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
   const [mode, setMode] = useState<"member" | "team" | "all">("all");
   const [selectedEntry, setSelectedEntry] = useState<EntryModalData | null>(null);
   const [manualRefreshTick, setManualRefreshTick] = useState(0);
-  const [lastUpdateMeta, setLastUpdateMeta] = useState<{ at: string; source: "auto" | "manual" | "cached" } | null>(null);
+  const [lastUpdateMeta, setLastUpdateMeta] = useState<{
+    at: string;
+    trigger: "auto" | "manual" | "cached";
+    dataSource: "db" | "toggl_sync" | "db_fallback" | null;
+  } | null>(null);
+  const [cooldownUntilMs, setCooldownUntilMs] = useState<number | null>(null);
+  const [cooldownNowMs, setCooldownNowMs] = useState(0);
   const [hoverTooltip, setHoverTooltip] = useState<HoverTooltipState | null>(null);
   const forceRefreshRef = useRef(false);
   const refreshSourceRef = useRef<"auto" | "manual" | "cached">("cached");
@@ -461,7 +476,7 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
     let active = true;
     const requestNonce = String(Date.now());
     const shouldForceRefresh = forceRefreshRef.current;
-    const refreshSource = shouldForceRefresh ? refreshSourceRef.current : "cached";
+    const refreshTrigger = shouldForceRefresh ? refreshSourceRef.current : "cached";
     setLoading(true);
     setError(null);
     setRetryAfter(null);
@@ -507,16 +522,32 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
         if (mode === "team" || mode === "all") {
           setTeamData(payload as TeamResponse);
           setData(null);
+          const cooldownActive = (payload as TeamResponse).cooldownActive ?? false;
+          const retryAfterSeconds = (payload as TeamResponse).retryAfterSeconds ?? 0;
+          setCooldownNowMs(Date.now());
+          setCooldownUntilMs(cooldownActive && retryAfterSeconds > 0 ? Date.now() + retryAfterSeconds * 1000 : null);
           const payloadCachedAt = (payload as TeamResponse).cachedAt;
           if (payloadCachedAt) {
-            setLastUpdateMeta({ at: payloadCachedAt, source: refreshSource });
+            setLastUpdateMeta({
+              at: payloadCachedAt,
+              trigger: refreshTrigger,
+              dataSource: (payload as TeamResponse).source ?? null,
+            });
           }
         } else {
           setData(payload as EntriesResponse);
           setTeamData(null);
+          const cooldownActive = (payload as EntriesResponse).cooldownActive ?? false;
+          const retryAfterSeconds = (payload as EntriesResponse).retryAfterSeconds ?? 0;
+          setCooldownNowMs(Date.now());
+          setCooldownUntilMs(cooldownActive && retryAfterSeconds > 0 ? Date.now() + retryAfterSeconds * 1000 : null);
           const payloadCachedAt = (payload as EntriesResponse).cachedAt;
           if (payloadCachedAt) {
-            setLastUpdateMeta({ at: payloadCachedAt, source: refreshSource });
+            setLastUpdateMeta({
+              at: payloadCachedAt,
+              trigger: refreshTrigger,
+              dataSource: (payload as EntriesResponse).source ?? null,
+            });
           }
         }
       })
@@ -543,13 +574,8 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
     if (!(mode === "team" || mode === "all")) return;
     let active = true;
     const requestNonce = String(Date.now());
-    const shouldForceRefresh = forceRefreshRef.current;
-
     const params = new URLSearchParams({ date, tzOffset: String(new Date().getTimezoneOffset()) });
     params.set("_req", requestNonce);
-    if (shouldForceRefresh) {
-      params.set("refresh", "1");
-    }
 
     fetch(`/api/team-week?${params.toString()}`, { cache: "no-store" })
       .then(async (res) => {
@@ -582,6 +608,14 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
 
     return () => window.clearInterval(intervalId);
   }, []);
+
+  useEffect(() => {
+    if (!cooldownUntilMs) return;
+    const tick = window.setInterval(() => {
+      setCooldownNowMs(Date.now());
+    }, 1000);
+    return () => window.clearInterval(tick);
+  }, [cooldownUntilMs]);
 
   const runningEntry = useMemo(() => {
     if (!data?.current) return null;
@@ -645,10 +679,14 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
   };
 
   const handleManualRefresh = () => {
+    const remainingSeconds = cooldownUntilMs ? Math.max(0, Math.ceil((cooldownUntilMs - cooldownNowMs) / 1000)) : 0;
+    if (remainingSeconds > 0) return;
     refreshSourceRef.current = "manual";
     forceRefreshRef.current = true;
     setManualRefreshTick((value) => value + 1);
   };
+  const cooldownRemainingSeconds = cooldownUntilMs ? Math.max(0, Math.ceil((cooldownUntilMs - cooldownNowMs) / 1000)) : 0;
+  const refreshDisabled = loading || cooldownRemainingSeconds > 0;
 
   const hideHoverTooltip = () => setHoverTooltip(null);
 
@@ -765,18 +803,24 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
             type="button"
             className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-sky-300"
             onClick={handleManualRefresh}
-            disabled={loading}
+            disabled={refreshDisabled}
           >
-            {loading ? "Refreshing..." : "Refresh now"}
+            {loading ? "Refreshing..." : cooldownRemainingSeconds > 0 ? "Cooldown active" : "Refresh now"}
           </button>
           <p className="text-xs text-slate-500">
             Last updated:{" "}
             {lastUpdateMeta
-              ? `${formatDateTime(lastUpdateMeta.at)} (${lastUpdateMeta.source === "manual" ? "Refresh now (Toggl sync)" : lastUpdateMeta.source === "auto" ? "automatic cached check" : "cached load"})`
+              ? `${formatDateTime(lastUpdateMeta.at)} (${lastUpdateMeta.dataSource === "toggl_sync" ? "fresh sync from Toggl" : lastUpdateMeta.dataSource === "db_fallback" ? "DB snapshot (refresh fallback)" : "DB snapshot"})`
               : "—"}
           </p>
         </div>
       </div>
+      {cooldownRemainingSeconds > 0 && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          Toggl quota cooldown active. Refresh available in {Math.floor(cooldownRemainingSeconds / 60)}m{" "}
+          {cooldownRemainingSeconds % 60}s.
+        </div>
+      )}
       {mode !== "member" && (
         <p className="text-xs font-medium text-sky-800">
           Tip: Team member names are clickable and open their dedicated profile pages.
@@ -1210,7 +1254,7 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <h2 className="text-lg font-semibold text-slate-900">Last 7 days overview</h2>
               <p className="text-sm text-slate-500">
-                Ranking by total worked time over the last seven days.
+                Ranking by total worked time over the last seven days (from stored DB rollups).
               </p>
               {(teamWeekData.warning || teamWeekData.stale) && (
                 <p className="mt-2 text-sm text-amber-700">

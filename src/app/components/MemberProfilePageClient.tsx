@@ -29,6 +29,9 @@ type MemberProfileResponse = {
   error?: string;
   aiEnabled?: boolean;
   aiWarning?: string | null;
+  source?: "db" | "toggl_sync" | "db_fallback";
+  cooldownActive?: boolean;
+  retryAfterSeconds?: number;
 };
 
 const AUTO_REFRESH_INTERVAL_MS = 15 * 60 * 1000;
@@ -70,6 +73,8 @@ export default function MemberProfilePageClient({
   const [error, setError] = useState<string | null>(null);
   const [payload, setPayload] = useState<MemberProfileResponse | null>(null);
   const forceRefreshRef = useRef(false);
+  const [cooldownUntilMs, setCooldownUntilMs] = useState<number | null>(null);
+  const [cooldownNowMs, setCooldownNowMs] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -96,6 +101,10 @@ export default function MemberProfilePageClient({
         if (!active) return;
         setPayload(data);
         setError(null);
+        const cooldownActive = data.cooldownActive ?? false;
+        const retryAfterSeconds = data.retryAfterSeconds ?? 0;
+        setCooldownNowMs(Date.now());
+        setCooldownUntilMs(cooldownActive && retryAfterSeconds > 0 ? Date.now() + retryAfterSeconds * 1000 : null);
       })
       .catch((err: Error) => {
         if (!active) return;
@@ -120,7 +129,17 @@ export default function MemberProfilePageClient({
     return () => window.clearInterval(intervalId);
   }, []);
 
+  useEffect(() => {
+    if (!cooldownUntilMs) return;
+    const tick = window.setInterval(() => {
+      setCooldownNowMs(Date.now());
+    }, 1000);
+    return () => window.clearInterval(tick);
+  }, [cooldownUntilMs]);
+
   const profile = payload?.members[0] ?? null;
+  const cooldownRemainingSeconds = cooldownUntilMs ? Math.max(0, Math.ceil((cooldownUntilMs - cooldownNowMs) / 1000)) : 0;
+  const refreshDisabled = cooldownRemainingSeconds > 0;
   const maxDaySeconds = useMemo(() => {
     if (!profile) return 1;
     return profile.days.reduce((max, day) => Math.max(max, day.seconds), 1);
@@ -143,12 +162,14 @@ export default function MemberProfilePageClient({
               <button
                 type="button"
                 onClick={() => {
+                  if (refreshDisabled) return;
                   forceRefreshRef.current = true;
                   setRefreshTick((value) => value + 1);
                 }}
-                className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white"
+                className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-sky-300"
+                disabled={refreshDisabled}
               >
-                Refresh now
+                {refreshDisabled ? "Cooldown active" : "Refresh now"}
               </button>
             </div>
           </div>
@@ -165,6 +186,12 @@ export default function MemberProfilePageClient({
           <p className="mt-2 text-xs text-slate-500">
             Auto-refresh checks cached data every 15 minutes. Toggl is called only when you click Refresh now.
           </p>
+          {cooldownRemainingSeconds > 0 && (
+            <p className="mt-2 text-xs text-amber-700">
+              Toggl quota cooldown active. Refresh available in {Math.floor(cooldownRemainingSeconds / 60)}m{" "}
+              {cooldownRemainingSeconds % 60}s.
+            </p>
+          )}
         </div>
 
         {!payload && !error && (
@@ -252,6 +279,14 @@ export default function MemberProfilePageClient({
                 {profile.aiAnalysis || "AI analysis is unavailable for this profile right now."}
               </p>
               <p className="mt-3 text-xs text-slate-500">Snapshot time: {formatDateTime(payload?.cachedAt)}</p>
+              <p className="mt-1 text-xs text-slate-500">
+                Source:{" "}
+                {payload?.source === "toggl_sync"
+                  ? "Fresh sync from Toggl"
+                  : payload?.source === "db_fallback"
+                    ? "DB snapshot (refresh fallback)"
+                    : "DB snapshot"}
+              </p>
             </div>
           </div>
         )}

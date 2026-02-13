@@ -90,6 +90,7 @@ When you click **Refresh view**, the app now persists historical records to Supa
 - `public.time_entries`: normalized Toggl entries (description, start/stop, duration, tags, raw payload).
 - `public.daily_member_stats`: per-day rollups per member (total seconds, entry count).
 - `public.sync_events`: ingestion/sync audit log (success/failure, scope, requested date).
+- `public.api_quota_locks`: shared Toggl cooldown lock state (prevents repeated 402/429 request storms).
 
 This gives you a solid base for historical charts and deeper analysis.
 

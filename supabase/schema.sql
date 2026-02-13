@@ -86,6 +86,15 @@ create table if not exists public.sync_events (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.api_quota_locks (
+  key text primary key,
+  locked_until timestamptz not null,
+  last_status integer not null,
+  reason text null,
+  retry_hint_seconds integer null,
+  updated_at timestamptz not null default now()
+);
+
 drop trigger if exists trg_members_updated_at on public.members;
 create trigger trg_members_updated_at
 before update on public.members
@@ -101,5 +110,11 @@ execute procedure public.set_updated_at();
 drop trigger if exists trg_daily_member_stats_updated_at on public.daily_member_stats;
 create trigger trg_daily_member_stats_updated_at
 before update on public.daily_member_stats
+for each row
+execute procedure public.set_updated_at();
+
+drop trigger if exists trg_api_quota_locks_updated_at on public.api_quota_locks;
+create trigger trg_api_quota_locks_updated_at
+before update on public.api_quota_locks
 for each row
 execute procedure public.set_updated_at();
