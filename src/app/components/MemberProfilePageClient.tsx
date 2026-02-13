@@ -20,7 +20,7 @@ type MemberProfileResponse = {
     topProjectSharePct: number;
     days: Array<{ date: string; seconds: number; entryCount: number }>;
     workItems: Array<{ project: string; description: string; seconds: number; entryCount: number }>;
-    kpis: Array<{ label: string; value: string; source: "sheet" | "auto" }>;
+    kpis?: Array<{ label: string; value: string; source: "sheet" | "auto" }>;
     aiAnalysis: string | null;
   }>;
   cachedAt?: string;
@@ -195,7 +195,7 @@ export default function MemberProfilePageClient({
                 <p className="text-[11px] uppercase tracking-wide text-slate-500">7-day total</p>
                 <p className="text-sm font-semibold text-slate-900">{formatDuration(profile.totalSeconds)}</p>
               </div>
-              {profile.kpis.map((kpi) => (
+              {(profile.kpis ?? []).map((kpi) => (
                 <div key={kpi.label} className="rounded-lg border border-slate-200 bg-white px-3 py-2">
                   <p className="text-[11px] uppercase tracking-wide text-slate-500">{kpi.label}</p>
                   <p className="text-sm font-semibold text-slate-900">{kpi.value}</p>

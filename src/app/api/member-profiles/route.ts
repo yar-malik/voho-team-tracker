@@ -59,6 +59,15 @@ type CacheEntry = {
   aiWarning?: string | null;
 };
 
+function ensureProfileKpis(profile: MemberProfile): MemberProfile {
+  const hasKpis = Array.isArray((profile as { kpis?: unknown }).kpis);
+  if (hasKpis) return profile;
+  return {
+    ...profile,
+    kpis: buildAutoKpis(profile),
+  };
+}
+
 function createEmptyProfile(name: string, weekDates: string[]): MemberProfile {
   const kpis: KpiItem[] = [
     { label: "Active days", value: "0/7", source: "auto" },
@@ -329,11 +338,17 @@ export async function GET(request: NextRequest) {
   const cachedAny = await getCacheSnapshot<CacheEntry>(cacheKey, true);
 
   if (!forceRefresh && cachedFresh) {
-    return NextResponse.json({ ...cachedFresh, stale: false, warning: null });
+    return NextResponse.json({
+      ...cachedFresh,
+      members: cachedFresh.members.map((profile) => ensureProfileKpis(profile)),
+      stale: false,
+      warning: null,
+    });
   }
   if (!forceRefresh && cachedAny) {
     return NextResponse.json({
       ...cachedAny,
+      members: cachedAny.members.map((profile) => ensureProfileKpis(profile)),
       stale: true,
       warning: "Showing last cached profile snapshot. Click Refresh now for newer data.",
     });
