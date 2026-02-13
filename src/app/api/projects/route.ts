@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createProject, listProjects, updateProject } from "@/lib/manualTimeEntriesStore";
-import { requireAdminOrThrow } from "@/lib/authorization";
+import { requireSignedInOrThrow } from "@/lib/authorization";
 import { DEFAULT_PROJECT_COLOR } from "@/lib/projectColors";
 
 export const dynamic = "force-dynamic";
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    await requireAdminOrThrow();
+    await requireSignedInOrThrow();
     const project = await createProject(name, body.color ?? null);
     return NextResponse.json({
       ok: true,
@@ -63,7 +63,8 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to create project";
-    return NextResponse.json({ error: message }, { status: 500 });
+    const status = message === "Unauthorized" ? 401 : 500;
+    return NextResponse.json({ error: message }, { status });
   }
 }
 
@@ -81,7 +82,7 @@ export async function PATCH(request: NextRequest) {
   }
 
   try {
-    await requireAdminOrThrow();
+    await requireSignedInOrThrow();
     const updated = await updateProject({
       key,
       name: body.name ?? null,
@@ -98,6 +99,7 @@ export async function PATCH(request: NextRequest) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to update project";
-    return NextResponse.json({ error: message }, { status: 500 });
+    const status = message === "Unauthorized" ? 401 : 500;
+    return NextResponse.json({ error: message }, { status });
   }
 }

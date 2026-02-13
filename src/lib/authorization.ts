@@ -49,3 +49,8 @@ export async function requireAdminOrThrow() {
   return context;
 }
 
+export async function requireSignedInOrThrow() {
+  const context = await getCurrentUserContext();
+  if (!context) throw new Error("Unauthorized");
+  return context;
+}
