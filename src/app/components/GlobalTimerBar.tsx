@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getProjectBaseColor } from "@/lib/projectColors";
 
 type RunningTimer = {
@@ -36,6 +36,7 @@ export default function GlobalTimerBar({ memberName }: { memberName: string | nu
   const [pickerSearch, setPickerSearch] = useState("");
   const pickerRef = useRef<HTMLDivElement | null>(null);
   const latestDraftRef = useRef({ description: "", projectName: "" });
+  const saveControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNowMs(Date.now()), 1000);
@@ -74,26 +75,54 @@ export default function GlobalTimerBar({ memberName }: { memberName: string | nu
     latestDraftRef.current = { description, projectName };
   }, [description, projectName]);
 
+  const persistRunningDraft = useCallback(
+    async (nextDescription: string, nextProjectName: string, options?: { keepalive?: boolean }) => {
+      if (!current || !memberName) return;
+      const keepalive = options?.keepalive ?? false;
+      if (!keepalive) {
+        saveControllerRef.current?.abort();
+        saveControllerRef.current = new AbortController();
+      }
+      const controller = saveControllerRef.current;
+
+      try {
+        await fetch("/api/time-entries/current", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            member: memberName,
+            description: nextDescription,
+            project: nextProjectName,
+          }),
+          signal: keepalive ? undefined : controller?.signal,
+          keepalive,
+          cache: "no-store",
+        });
+      } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") return;
+        // Best-effort.
+      } finally {
+        if (!keepalive && controller && saveControllerRef.current === controller) {
+          saveControllerRef.current = null;
+        }
+      }
+    },
+    [current, memberName]
+  );
+
   useEffect(() => {
-    if (!current || !memberName) return;
-    const controller = new AbortController();
-    const draft = latestDraftRef.current;
+    const flushOnLeave = () => {
+      if (!current || !memberName) return;
+      const draft = latestDraftRef.current;
+      void persistRunningDraft(draft.description, draft.projectName, { keepalive: true });
+    };
+    window.addEventListener("pagehide", flushOnLeave);
+    return () => window.removeEventListener("pagehide", flushOnLeave);
+  }, [current, memberName, persistRunningDraft]);
 
-    void fetch("/api/time-entries/current", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        member: memberName,
-        description: draft.description,
-        project: draft.projectName,
-      }),
-      signal: controller.signal,
-    }).catch(() => {
-      // Best-effort.
-    });
-
-    return () => controller.abort();
-  }, [current?.id, description, projectName, memberName]);
+  useEffect(() => {
+    return () => saveControllerRef.current?.abort();
+  }, []);
 
   useEffect(() => {
     if (!pickerOpen) return;
@@ -135,7 +164,11 @@ export default function GlobalTimerBar({ memberName }: { memberName: string | nu
         <input
           type="text"
           value={description}
-          onChange={(event) => setDescription(event.target.value)}
+          onChange={(event) => {
+            const next = event.target.value;
+            setDescription(next);
+            void persistRunningDraft(next, projectName);
+          }}
           placeholder="What are you working on?"
           className="min-w-[280px] flex-1 rounded-lg border border-slate-300 px-4 py-2.5 text-xl font-semibold text-slate-900 outline-none focus:border-sky-400"
         />
@@ -173,6 +206,7 @@ export default function GlobalTimerBar({ memberName }: { memberName: string | nu
                   type="button"
                   onClick={() => {
                     setProjectName("");
+                    void persistRunningDraft(description, "");
                     setPickerOpen(false);
                   }}
                   className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left hover:bg-slate-50"
@@ -186,6 +220,7 @@ export default function GlobalTimerBar({ memberName }: { memberName: string | nu
                     type="button"
                     onClick={() => {
                       setProjectName(project.name);
+                      void persistRunningDraft(description, project.name);
                       setPickerOpen(false);
                     }}
                     className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left hover:bg-slate-50"
