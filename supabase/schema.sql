@@ -65,8 +65,11 @@ as $$
       regexp_replace(
         regexp_replace(
           regexp_replace(
-            regexp_replace(lower(coalesce(input_name, '')), '\byt\b', 'youtube', 'g'),
-            '\bmeetings\b', 'meeting', 'g'
+            regexp_replace(
+              regexp_replace(lower(coalesce(input_name, '')), '\byt\b', 'youtube', 'g'),
+              '\bmeetings\b', 'meeting', 'g'
+            ),
+            '\bmeeting[\s\-_]*old\b', 'meeting', 'g'
           ),
           '\bprep(ing|ping)?\b', 'prepping', 'g'
         ),
