@@ -28,6 +28,10 @@ type ProjectCacheValue = {
 const projectNameCache = new Map<string, ProjectCacheValue>();
 const projectFetchInflight = new Map<string, Promise<string | null>>();
 
+function isSupabaseConfigured() {
+  return Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
+}
+
 function parseTeamEnv(): TeamMember[] {
   const raw = process.env.TOGGL_TEAM;
   if (!raw) return [];
@@ -136,6 +140,42 @@ function projectKey(workspaceId: number, projectId: number): string {
   return `${workspaceId}:${projectId}`;
 }
 
+async function fetchProjectNamesFromSupabase(keys: string[]): Promise<Map<string, string>> {
+  const result = new Map<string, string>();
+  if (!isSupabaseConfigured() || keys.length === 0) return result;
+
+  const base = process.env.SUPABASE_URL!;
+  const token = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  const encodedKeys = keys.map((key) => `"${key.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`).join(",");
+  const filter = `in.(${encodedKeys})`;
+  const url =
+    `${base}/rest/v1/projects` +
+    `?select=project_key,project_name` +
+    `&project_key=${encodeURIComponent(filter)}`;
+
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        apikey: token,
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      cache: "no-store",
+    });
+    if (!response.ok) return result;
+    const rows = (await response.json()) as Array<{ project_key: string; project_name: string }>;
+    for (const row of rows) {
+      if (!row.project_key || !row.project_name) continue;
+      result.set(row.project_key, row.project_name);
+    }
+  } catch {
+    // Ignore Supabase read errors and continue with Toggl API fallback.
+  }
+
+  return result;
+}
+
 export async function fetchProjectNames(
   token: string,
   entries: Array<Pick<TogglTimeEntry, "project_id" | "workspace_id" | "wid">>
@@ -161,13 +201,26 @@ export async function fetchProjectNames(
     }
   }
 
+  if (uniqueProjects.size > 0) {
+    const supabaseHitMap = await fetchProjectNamesFromSupabase(Array.from(uniqueProjects.keys()));
+    for (const [key, name] of supabaseHitMap.entries()) {
+      projectMap.set(key, name);
+      projectNameCache.set(key, { name, expiresAt: Date.now() + PROJECT_CACHE_TTL_MS });
+      uniqueProjects.delete(key);
+    }
+  }
+
   await Promise.all(
     Array.from(uniqueProjects.values()).map(async ({ workspaceId, projectId }) => {
       const key = projectKey(workspaceId, projectId);
       const inflight = projectFetchInflight.get(key);
       if (inflight) {
-        const name = await inflight;
-        if (name) projectMap.set(key, name);
+        try {
+          const name = await inflight;
+          if (name) projectMap.set(key, name);
+        } catch {
+          // Non-fatal: keep entry without project name if this lookup fails.
+        }
         return;
       }
 
@@ -197,7 +250,12 @@ export async function fetchProjectNames(
 
       projectFetchInflight.set(key, fetchPromise);
       try {
-        const name = await fetchPromise;
+        let name: string | null = null;
+        try {
+          name = await fetchPromise;
+        } catch {
+          // Non-fatal: keep entry without project name if this lookup fails.
+        }
         if (name) projectMap.set(key, name);
       } finally {
         projectFetchInflight.delete(key);
