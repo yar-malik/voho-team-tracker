@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { getProjectBaseColor, getProjectSurfaceColors } from "@/lib/projectColors";
 
 type TimeEntry = {
   id: number;
@@ -35,7 +36,7 @@ type WeekTotalResponse = {
   error?: string;
 };
 
-type ProjectItem = { key: string; name: string; source: "manual" | "external" };
+type ProjectItem = { key: string; name: string; source: "manual" | "external"; color?: string | null };
 type ProjectsResponse = { projects: ProjectItem[]; error?: string };
 
 type CalendarDraft = { hour: number; minute: number };
@@ -52,6 +53,7 @@ type EntryEditorState = {
 const CALENDAR_HOUR_HEIGHT = 56;
 const MIN_ENTRY_MINUTES = 15;
 const DRAG_SNAP_MINUTES = 5;
+const ZOOM_LEVELS = [40, 48, 56, 68, 80] as const;
 
 function formatTimer(totalSeconds: number): string {
   const safe = Math.max(0, Math.floor(totalSeconds));
@@ -168,7 +170,7 @@ function buildWeekDays(dateInput: string) {
   });
 }
 
-function buildCalendarBlock(entry: TimeEntry, dayStartMs: number) {
+function buildCalendarBlock(entry: TimeEntry, dayStartMs: number, hourHeight: number) {
   const startMs = new Date(entry.start).getTime();
   if (Number.isNaN(startMs)) return null;
   const stopMs = entry.stop ? new Date(entry.stop).getTime() : startMs + Math.max(0, entry.duration) * 1000;
@@ -178,8 +180,8 @@ function buildCalendarBlock(entry: TimeEntry, dayStartMs: number) {
   return {
     id: `${entry.id}-${startMs}`,
     entryId: entry.id,
-    top: (minutesFromStart / 60) * CALENDAR_HOUR_HEIGHT,
-    height: (durationMinutes / 60) * CALENDAR_HOUR_HEIGHT,
+    top: (minutesFromStart / 60) * hourHeight,
+    height: (durationMinutes / 60) * hourHeight,
     description: entry.description?.trim() || "(No description)",
     project: entry.project_name?.trim() || "No project",
     projectColor: entry.project_color?.trim() || null,
@@ -258,47 +260,9 @@ function minuteToIso(dateInput: string, minuteOfDay: number) {
   return buildLocalDateTimeIso(dateInput, hour, minute);
 }
 
-function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
-  const normalized = hex.trim();
-  if (!/^#[0-9a-fA-F]{6}$/.test(normalized)) return null;
-  const r = Number.parseInt(normalized.slice(1, 3), 16);
-  const g = Number.parseInt(normalized.slice(3, 5), 16);
-  const b = Number.parseInt(normalized.slice(5, 7), 16);
-  return { r, g, b };
-}
-
 function getPastelProjectStyle(project: string, projectColor: string | null | undefined): CSSProperties {
-  const rgb = projectColor ? hexToRgb(projectColor) : null;
-  if (rgb) {
-    return {
-      borderColor: `rgb(${rgb.r} ${rgb.g} ${rgb.b} / 0.75)`,
-      backgroundColor: `rgb(${rgb.r} ${rgb.g} ${rgb.b} / 0.20)`,
-    };
-  }
-
-  if (project.trim().toLowerCase() === "no project") {
-    return {
-      borderColor: "rgb(203 213 225 / 0.8)",
-      backgroundColor: "rgb(241 245 249 / 0.9)",
-    };
-  }
-
-  const fallback = [
-    { border: "rgb(167 139 250 / 0.72)", bg: "rgb(237 233 254 / 0.90)" }, // lavender
-    { border: "rgb(96 165 250 / 0.72)", bg: "rgb(219 234 254 / 0.90)" }, // sky
-    { border: "rgb(45 212 191 / 0.72)", bg: "rgb(204 251 241 / 0.90)" }, // mint
-    { border: "rgb(249 168 212 / 0.72)", bg: "rgb(252 231 243 / 0.92)" }, // rose
-    { border: "rgb(251 191 36 / 0.72)", bg: "rgb(254 243 199 / 0.92)" }, // amber
-    { border: "rgb(134 239 172 / 0.72)", bg: "rgb(220 252 231 / 0.92)" }, // green
-    { border: "rgb(147 197 253 / 0.72)", bg: "rgb(224 242 254 / 0.92)" }, // cyan
-  ];
-
-  let hash = 0;
-  for (let i = 0; i < project.length; i += 1) {
-    hash = (hash * 31 + project.charCodeAt(i)) >>> 0;
-  }
-  const color = fallback[hash % fallback.length];
-  return { borderColor: color.border, backgroundColor: color.bg };
+  const colorSource = (projectColor ?? "").trim() || project;
+  return getProjectSurfaceColors(colorSource);
 }
 
 export default function TrackPageClient({ memberName }: { memberName: string }) {
@@ -314,12 +278,17 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
 
   const [description, setDescription] = useState("");
   const [projectName, setProjectName] = useState("");
+  const [projectPickerOpen, setProjectPickerOpen] = useState(false);
+  const [projectSearch, setProjectSearch] = useState("");
   const [quickDurationInput, setQuickDurationInput] = useState("");
   const [quickDurationMode, setQuickDurationMode] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState(2);
   const [calendarDraft, setCalendarDraft] = useState<CalendarDraft | null>(null);
   const [draftDurationMinutes, setDraftDurationMinutes] = useState("60");
   const [entryEditor, setEntryEditor] = useState<EntryEditorState | null>(null);
   const [blockDrag, setBlockDrag] = useState<BlockDragState | null>(null);
+  const projectPickerRef = useRef<HTMLDivElement | null>(null);
+  const hourHeight = ZOOM_LEVELS[zoomLevel];
 
   useEffect(() => {
     if (!entryEditor) return;
@@ -344,11 +313,29 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
   }, [currentTimer]);
 
   useEffect(() => {
+    if (!projectPickerOpen) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (!projectPickerRef.current) return;
+      if (projectPickerRef.current.contains(event.target as Node)) return;
+      setProjectPickerOpen(false);
+    };
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setProjectPickerOpen(false);
+    };
+    window.addEventListener("mousedown", onPointerDown);
+    window.addEventListener("keydown", onEscape);
+    return () => {
+      window.removeEventListener("mousedown", onPointerDown);
+      window.removeEventListener("keydown", onEscape);
+    };
+  }, [projectPickerOpen]);
+
+  useEffect(() => {
     if (!blockDrag) return;
 
     const handleMove = (event: MouseEvent) => {
       const deltaPx = event.clientY - blockDrag.startClientY;
-      const deltaMinutes = snapMinutes((deltaPx / CALENDAR_HOUR_HEIGHT) * 60);
+      const deltaMinutes = snapMinutes((deltaPx / hourHeight) * 60);
 
       if (Math.abs(deltaPx) >= 3 && !blockDrag.hasMoved) {
         setBlockDrag((prev) => (prev ? { ...prev, hasMoved: true } : prev));
@@ -359,24 +346,24 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
 
         if (prev.mode === "move") {
           const durationPx = prev.initialHeight;
-          const rawTop = prev.initialTop + (deltaMinutes / 60) * CALENDAR_HOUR_HEIGHT;
-          const maxTop = 24 * CALENDAR_HOUR_HEIGHT - durationPx;
+          const rawTop = prev.initialTop + (deltaMinutes / 60) * hourHeight;
+          const maxTop = 24 * hourHeight - durationPx;
           const nextTop = Math.max(0, Math.min(maxTop, rawTop));
           return { ...prev, previewTop: nextTop, previewHeight: durationPx };
         }
 
         if (prev.mode === "resize-start") {
           const endPx = prev.initialTop + prev.initialHeight;
-          const rawTop = prev.initialTop + (deltaMinutes / 60) * CALENDAR_HOUR_HEIGHT;
-          const maxTop = endPx - (MIN_ENTRY_MINUTES / 60) * CALENDAR_HOUR_HEIGHT;
+          const rawTop = prev.initialTop + (deltaMinutes / 60) * hourHeight;
+          const maxTop = endPx - (MIN_ENTRY_MINUTES / 60) * hourHeight;
           const nextTop = Math.max(0, Math.min(maxTop, rawTop));
-          const nextHeight = Math.max((MIN_ENTRY_MINUTES / 60) * CALENDAR_HOUR_HEIGHT, endPx - nextTop);
+          const nextHeight = Math.max((MIN_ENTRY_MINUTES / 60) * hourHeight, endPx - nextTop);
           return { ...prev, previewTop: nextTop, previewHeight: nextHeight };
         }
 
-        const rawHeight = prev.initialHeight + (deltaMinutes / 60) * CALENDAR_HOUR_HEIGHT;
-        const maxHeight = 24 * CALENDAR_HOUR_HEIGHT - prev.initialTop;
-        const nextHeight = Math.max((MIN_ENTRY_MINUTES / 60) * CALENDAR_HOUR_HEIGHT, Math.min(maxHeight, rawHeight));
+        const rawHeight = prev.initialHeight + (deltaMinutes / 60) * hourHeight;
+        const maxHeight = 24 * hourHeight - prev.initialTop;
+        const nextHeight = Math.max((MIN_ENTRY_MINUTES / 60) * hourHeight, Math.min(maxHeight, rawHeight));
         return { ...prev, previewTop: prev.initialTop, previewHeight: nextHeight };
       });
     };
@@ -399,10 +386,10 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
         return;
       }
 
-      const nextStartMinute = Math.round((finalDrag.previewTop / CALENDAR_HOUR_HEIGHT) * 60);
+      const nextStartMinute = Math.round((finalDrag.previewTop / hourHeight) * 60);
       const nextDurationMinutes = Math.max(
         MIN_ENTRY_MINUTES,
-        Math.round((finalDrag.previewHeight / CALENDAR_HOUR_HEIGHT) * 60)
+        Math.round((finalDrag.previewHeight / hourHeight) * 60)
       );
       const nextEndMinute = Math.min(24 * 60, nextStartMinute + nextDurationMinutes);
 
@@ -441,7 +428,7 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
       window.removeEventListener("mousemove", handleMove);
       window.removeEventListener("mouseup", handleUp);
     };
-  }, [blockDrag, date, memberName]);
+  }, [blockDrag, date, hourHeight, memberName]);
 
   useEffect(() => {
     let active = true;
@@ -531,11 +518,11 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
   const dayStartMs = useMemo(() => new Date(`${date}T00:00:00`).getTime(), [date]);
   const calendarBlocks = useMemo(() => {
     const blocks = (entries?.entries ?? [])
-      .map((entry) => buildCalendarBlock(entry, dayStartMs))
+      .map((entry) => buildCalendarBlock(entry, dayStartMs, hourHeight))
       .filter((item): item is NonNullable<typeof item> => item !== null)
       .sort((a, b) => a.top - b.top);
     return layoutCalendarBlocks(blocks);
-  }, [entries?.entries, dayStartMs]);
+  }, [entries?.entries, dayStartMs, hourHeight]);
 
   const nowMarkerTop = useMemo(() => {
     const selectedDay = new Date(`${date}T00:00:00`);
@@ -548,10 +535,16 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
       return null;
     }
     const minutes = now.getHours() * 60 + now.getMinutes();
-    return (minutes / 60) * CALENDAR_HOUR_HEIGHT;
-  }, [date, nowMs]);
+    return (minutes / 60) * hourHeight;
+  }, [date, hourHeight, nowMs]);
 
   const hours = useMemo(() => Array.from({ length: 24 }, (_, hour) => hour), []);
+  const filteredProjects = useMemo(() => {
+    const query = projectSearch.trim().toLowerCase();
+    const sorted = [...projects].sort((a, b) => a.name.localeCompare(b.name));
+    if (!query) return sorted;
+    return sorted.filter((project) => project.name.toLowerCase().includes(query));
+  }, [projectSearch, projects]);
 
   function emitTimerChanged(detail: { memberName: string; isRunning: boolean; startAt?: string | null; durationSeconds?: number }) {
     window.dispatchEvent(new CustomEvent("voho-timer-changed", { detail }));
@@ -613,19 +606,78 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
             />
           </div>
           <div className="flex items-center gap-2">
-            <input
-              type="text"
-              value={projectName}
-              onChange={(event) => setProjectName(event.target.value)}
-              placeholder="Project"
-              list="project-list"
-              className="w-[180px] rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-medium text-sky-900"
-            />
-            <datalist id="project-list">
-              {projects.map((project) => (
-                <option key={project.key} value={project.name} />
-              ))}
-            </datalist>
+            <div className="relative" ref={projectPickerRef}>
+              <button
+                type="button"
+                onClick={() => setProjectPickerOpen((open) => !open)}
+                className="inline-flex h-10 min-w-[190px] items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 text-sm font-semibold text-sky-900 shadow-sm transition hover:bg-sky-100"
+                title="Pick project"
+              >
+                <svg viewBox="0 0 24 24" className="h-4 w-4 text-sky-700" fill="currentColor" aria-hidden="true">
+                  <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5h3l1.5 1.5h8.5A2.5 2.5 0 0 1 21 9v9.5a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 18.5z" />
+                </svg>
+                <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: getProjectBaseColor(projectName || "No project") }} />
+                <span className="max-w-[120px] truncate">{projectName || "No project"}</span>
+              </button>
+
+              {projectPickerOpen && (
+                <div className="absolute right-0 z-50 mt-2 w-[360px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_18px_48px_rgba(15,23,42,0.24)]">
+                  <div className="border-b border-slate-100 p-3">
+                    <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                      <svg viewBox="0 0 24 24" className="h-4 w-4 text-slate-500" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                        <circle cx="11" cy="11" r="7" />
+                        <path d="m20 20-3.5-3.5" strokeLinecap="round" />
+                      </svg>
+                      <input
+                        type="text"
+                        value={projectSearch}
+                        onChange={(event) => setProjectSearch(event.target.value)}
+                        placeholder="Search by project"
+                        className="w-full bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400"
+                        autoFocus
+                      />
+                    </div>
+                  </div>
+
+                  <div className="max-h-[340px] overflow-y-auto p-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setProjectName("");
+                        setProjectPickerOpen(false);
+                      }}
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left hover:bg-slate-50"
+                    >
+                      <span className="h-2.5 w-2.5 rounded-full bg-slate-300" />
+                      <span className="text-sm font-medium text-slate-700">No project</span>
+                    </button>
+
+                    <p className="px-3 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Projects</p>
+                    {filteredProjects.length === 0 ? (
+                      <p className="px-3 py-4 text-sm text-slate-500">No matching project.</p>
+                    ) : (
+                      filteredProjects.map((project) => (
+                        <button
+                          key={project.key}
+                          type="button"
+                          onClick={() => {
+                            setProjectName(project.name);
+                            setProjectPickerOpen(false);
+                          }}
+                          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left hover:bg-slate-50"
+                        >
+                          <span
+                            className="h-2.5 w-2.5 rounded-full"
+                            style={{ backgroundColor: getProjectBaseColor(project.color || project.name) }}
+                          />
+                          <span className="truncate text-sm font-semibold text-slate-800">{project.name}</span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
 
             {!currentTimer || quickDurationMode ? (
               <input
@@ -852,14 +904,35 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
           )}
 
           <div className="relative overflow-x-auto">
-            <div className="relative min-w-[820px]" style={{ height: `${24 * CALENDAR_HOUR_HEIGHT}px` }}>
+            <div className="relative min-w-[820px]" style={{ height: `${24 * hourHeight}px` }}>
+              <div className="absolute left-2 top-2 z-30 flex items-center gap-1 rounded-lg border border-slate-200 bg-white/95 p-1 shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => setZoomLevel((value) => Math.max(0, value - 1))}
+                  disabled={zoomLevel === 0}
+                  className="h-7 w-7 rounded-md border border-slate-200 text-lg leading-none text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  title="Zoom out"
+                >
+                  −
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setZoomLevel((value) => Math.min(ZOOM_LEVELS.length - 1, value + 1))}
+                  disabled={zoomLevel === ZOOM_LEVELS.length - 1}
+                  className="h-7 w-7 rounded-md border border-slate-200 text-lg leading-none text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  title="Zoom in"
+                >
+                  +
+                </button>
+              </div>
+
               {hours.map((hour) => (
                 <button
                   key={hour}
                   type="button"
                   onClick={() => setCalendarDraft({ hour, minute: 0 })}
                   className="absolute left-0 right-0 border-b border-slate-100 text-left hover:bg-slate-50"
-                  style={{ top: `${hour * CALENDAR_HOUR_HEIGHT}px`, height: `${CALENDAR_HOUR_HEIGHT}px` }}
+                  style={{ top: `${hour * hourHeight}px`, height: `${hourHeight}px` }}
                 >
                   <span className="absolute left-3 top-1 text-xs text-slate-500">{String(hour).padStart(2, "0")}:00</span>
                 </button>

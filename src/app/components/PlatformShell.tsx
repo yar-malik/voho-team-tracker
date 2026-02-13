@@ -287,7 +287,7 @@ export default function PlatformShell({
             <div>
               <p className="px-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Track</p>
               <div className="mt-2 space-y-1.5">
-                <Link href="/track" className={navClass(isActive(pathname, "/track"))}>
+                <Link href="/track" prefetch className={navClass(isActive(pathname, "/track"))}>
                   {isRunning ? (
                     <span className="inline-flex items-center gap-2">
                       <span className="relative inline-flex h-2.5 w-2.5">
@@ -310,13 +310,13 @@ export default function PlatformShell({
             <div>
               <p className="px-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Analyze</p>
               <div className="mt-2 space-y-1.5">
-                <Link href="/reports" className={navClass(isActive(pathname, "/reports"))}>
+                <Link href="/reports" prefetch className={navClass(isActive(pathname, "/reports"))}>
                   <span className="inline-flex items-center gap-2">
                     <ReportsIcon className={iconClass()} />
                     <span>Reports</span>
                   </span>
                 </Link>
-                <Link href="/team-overview" className={navClass(isActive(pathname, "/team-overview"))}>
+                <Link href="/team-overview" prefetch className={navClass(isActive(pathname, "/team-overview"))}>
                   <span className="inline-flex items-center gap-2">
                     <TeamIcon className={iconClass()} />
                     <span>Team overview</span>
@@ -328,19 +328,23 @@ export default function PlatformShell({
             <div>
               <p className="px-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Manage</p>
               <div className="mt-2 space-y-1.5">
-                <Link href="/projects" className={navClass(isActive(pathname, "/projects"))}>
+                <Link href="/projects" prefetch className={navClass(isActive(pathname, "/projects"))}>
                   <span className="inline-flex items-center gap-2">
                     <ProjectsIcon className={iconClass()} />
                     <span>Projects</span>
                   </span>
                 </Link>
-                <Link href="/members" className={navClass(isActive(pathname, "/members") || isActive(pathname, "/member"))}>
+                <Link
+                  href="/members"
+                  prefetch
+                  className={navClass(isActive(pathname, "/members") || isActive(pathname, "/member"))}
+                >
                   <span className="inline-flex items-center gap-2">
                     <MembersIcon className={iconClass()} />
                     <span>Members</span>
                   </span>
                 </Link>
-                <Link href="/kpis" className={navClass(isActive(pathname, "/kpis"))}>
+                <Link href="/kpis" prefetch className={navClass(isActive(pathname, "/kpis"))}>
                   <span className="inline-flex items-center gap-2">
                     <KpiIcon className={iconClass()} />
                     <span>KPIs</span>

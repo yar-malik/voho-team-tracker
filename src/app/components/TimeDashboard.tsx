@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from "react";
+import { getProjectSurfaceColors } from "@/lib/projectColors";
 
 type Member = { name: string };
 
@@ -307,47 +308,9 @@ function getMemberPageHref(memberName: string, date: string) {
   return `/member/${encodeURIComponent(memberName)}?date=${encodeURIComponent(date)}`;
 }
 
-function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
-  const normalized = hex.trim();
-  if (!/^#[0-9a-fA-F]{6}$/.test(normalized)) return null;
-  const r = Number.parseInt(normalized.slice(1, 3), 16);
-  const g = Number.parseInt(normalized.slice(3, 5), 16);
-  const b = Number.parseInt(normalized.slice(5, 7), 16);
-  return { r, g, b };
-}
-
 function getProjectBlockStyle(project: string, projectColor: string | null | undefined): CSSProperties {
-  const rgb = projectColor ? hexToRgb(projectColor) : null;
-  if (rgb) {
-    return {
-      borderColor: `rgb(${rgb.r} ${rgb.g} ${rgb.b} / 0.72)`,
-      backgroundColor: `rgb(${rgb.r} ${rgb.g} ${rgb.b} / 0.20)`,
-    };
-  }
-
-  if (!project || project === "No project") {
-    return {
-      borderColor: "rgb(148 163 184 / 0.8)",
-      backgroundColor: "rgb(241 245 249 / 0.9)",
-    };
-  }
-
-  const fallback = [
-    { border: "rgb(147 197 253 / 0.72)", bg: "rgb(224 242 254 / 0.90)" },
-    { border: "rgb(167 139 250 / 0.72)", bg: "rgb(237 233 254 / 0.90)" },
-    { border: "rgb(249 168 212 / 0.72)", bg: "rgb(252 231 243 / 0.92)" },
-    { border: "rgb(251 191 36 / 0.72)", bg: "rgb(254 243 199 / 0.92)" },
-    { border: "rgb(94 234 212 / 0.72)", bg: "rgb(204 251 241 / 0.92)" },
-    { border: "rgb(134 239 172 / 0.72)", bg: "rgb(220 252 231 / 0.92)" },
-    { border: "rgb(186 230 253 / 0.72)", bg: "rgb(224 242 254 / 0.92)" },
-  ];
-
-  let hash = 0;
-  for (let i = 0; i < project.length; i += 1) {
-    hash = (hash * 31 + project.charCodeAt(i)) >>> 0;
-  }
-  const color = fallback[hash % fallback.length];
-  return { borderColor: color.border, backgroundColor: color.bg };
+  const colorSource = (projectColor ?? "").trim() || project;
+  return getProjectSurfaceColors(colorSource);
 }
 
 function buildSummary(entries: TimeEntry[]) {
@@ -457,8 +420,8 @@ export default function TimeDashboard({
   }, [restrictToMember, members]);
 
   useEffect(() => {
-    setMode(initialMode);
-  }, [initialMode]);
+    setMode(isSelfOnly ? "member" : initialMode);
+  }, [initialMode, isSelfOnly]);
 
   useEffect(() => {
     const storedFilters = localStorage.getItem(FILTERS_KEY);
@@ -483,14 +446,14 @@ export default function TimeDashboard({
         if (parsed.date) {
           setDate(parsed.date);
         }
-        if (parsed.mode) {
+        if (parsed.mode && !isSelfOnly) {
           setMode(parsed.mode === "member" ? "all" : parsed.mode);
         }
       } catch {
         // ignore
       }
     }
-  }, [members]);
+  }, [isSelfOnly, members]);
 
   useEffect(() => {
     if (!member) return;
@@ -729,9 +692,9 @@ export default function TimeDashboard({
   };
 
   const handleApplyFilter = (filter: SavedFilter) => {
-    setMember(filter.member);
+    if (!isSelfOnly) setMember(filter.member);
     setDate(filter.date);
-    setMode("all");
+    setMode(isSelfOnly ? "member" : "all");
   };
 
   if (!hasMembers) {
