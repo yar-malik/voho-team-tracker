@@ -304,6 +304,58 @@ export async function listMemberProfiles(): Promise<Array<{ name: string; email:
   return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
 }
 
+export async function getMemberNameByEmail(email: string): Promise<string | null> {
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!normalizedEmail || !isSupabaseConfigured()) return null;
+
+  const url =
+    `${getBaseUrl()}/rest/v1/members` +
+    `?select=member_name` +
+    `&email=eq.${encodeURIComponent(normalizedEmail)}` +
+    `&limit=1`;
+  const response = await fetch(url, {
+    method: "GET",
+    headers: supabaseHeaders(),
+    cache: "no-store",
+  });
+  if (!response.ok) return null;
+  const rows = (await response.json()) as Array<{ member_name?: string }>;
+  const memberName = rows[0]?.member_name?.trim() ?? "";
+  return memberName.length > 0 ? canonicalizeMemberName(memberName) : null;
+}
+
+function getLastSevenLocalDates(endDate: string) {
+  const end = new Date(`${endDate}T00:00:00Z`);
+  const dates: string[] = [];
+  for (let i = 6; i >= 0; i -= 1) {
+    const d = new Date(end);
+    d.setUTCDate(d.getUTCDate() - i);
+    dates.push(d.toISOString().slice(0, 10));
+  }
+  return dates;
+}
+
+export async function getMemberWeekTotalSeconds(memberName: string, endDate: string): Promise<number> {
+  if (!isSupabaseConfigured()) return 0;
+  const canonicalMember = canonicalizeMemberName(memberName);
+  const weekDates = getLastSevenLocalDates(endDate);
+  const startDate = weekDates[0];
+  const url =
+    `${getBaseUrl()}/rest/v1/daily_member_stats` +
+    `?select=total_seconds` +
+    `&member_name=eq.${encodeURIComponent(canonicalMember)}` +
+    `&stat_date=gte.${encodeURIComponent(startDate)}` +
+    `&stat_date=lte.${encodeURIComponent(endDate)}`;
+  const response = await fetch(url, {
+    method: "GET",
+    headers: supabaseHeaders(),
+    cache: "no-store",
+  });
+  if (!response.ok) return 0;
+  const rows = (await response.json()) as Array<{ total_seconds?: number }>;
+  return rows.reduce((acc, row) => acc + Math.max(0, Number(row.total_seconds ?? 0)), 0);
+}
+
 export async function resolveCanonicalMemberName(inputName: string): Promise<string | null> {
   const normalized = canonicalizeMemberName(inputName).trim().toLowerCase();
   if (!normalized) return null;

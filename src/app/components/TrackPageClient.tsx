@@ -29,11 +29,8 @@ type CurrentTimerResponse = {
   error?: string;
 };
 
-type MemberWeekResponse = {
-  members: Array<{
-    name: string;
-    totalSeconds: number;
-  }>;
+type WeekTotalResponse = {
+  totalSeconds: number;
   error?: string;
 };
 
@@ -134,7 +131,7 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
   const [weekTotalSeconds, setWeekTotalSeconds] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [nowMs, setNowMs] = useState(Date.now());
+  const [nowMs, setNowMs] = useState(0);
 
   const [description, setDescription] = useState("");
   const [projectName, setProjectName] = useState("");
@@ -155,44 +152,68 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
       _req: String(Date.now()),
     });
 
-    Promise.all([
-      fetch(`/api/entries?${params.toString()}`, { cache: "no-store" }).then(async (res) => {
-        const data = (await res.json()) as EntriesResponse;
-        if (!res.ok || data.error) throw new Error(data.error || "Failed to load entries");
-        return data;
-      }),
-      fetch(`/api/time-entries/current?member=${encodeURIComponent(memberName)}&_req=${Date.now()}`, { cache: "no-store" }).then(
-        async (res) => {
-          const data = (await res.json()) as CurrentTimerResponse;
-          if (!res.ok || data.error) throw new Error(data.error || "Failed to load timer");
-          return data;
-        }
-      ),
-      fetch(`/api/projects?_req=${Date.now()}`, { cache: "no-store" }).then(async (res) => {
-        const data = (await res.json()) as ProjectsResponse;
-        if (!res.ok || data.error) throw new Error(data.error || "Failed to load projects");
-        return data;
-      }),
-      fetch(`/api/member-profiles?member=${encodeURIComponent(memberName)}&date=${encodeURIComponent(date)}&_req=${Date.now()}`, {
-        cache: "no-store",
-      }).then(async (res) => {
-        const data = (await res.json()) as MemberWeekResponse;
-        if (!res.ok || data.error) throw new Error(data.error || "Failed to load weekly summary");
-        return data;
-      }),
-    ])
-      .then(([entriesData, timerData, projectsData, weekData]) => {
+    const loadPrimary = async () => {
+      try {
+        const [entriesData, timerData] = await Promise.all([
+          fetch(`/api/entries?${params.toString()}`, { cache: "no-store" }).then(async (res) => {
+            const data = (await res.json()) as EntriesResponse;
+            if (!res.ok || data.error) throw new Error(data.error || "Failed to load entries");
+            return data;
+          }),
+          fetch(`/api/time-entries/current?member=${encodeURIComponent(memberName)}&_req=${Date.now()}`, { cache: "no-store" }).then(
+            async (res) => {
+              const data = (await res.json()) as CurrentTimerResponse;
+              if (!res.ok || data.error) throw new Error(data.error || "Failed to load timer");
+              return data;
+            }
+          ),
+        ]);
         if (!active) return;
         setEntries(entriesData);
         setCurrentTimer(timerData.current);
-        setProjects(projectsData.projects);
-        setWeekTotalSeconds(weekData.members[0]?.totalSeconds ?? 0);
         setError(null);
-      })
-      .catch((err: Error) => {
+      } catch (err) {
         if (!active) return;
-        setError(err.message);
-      });
+        setError(err instanceof Error ? err.message : "Failed to load tracking data");
+      }
+    };
+
+    const loadProjects = async () => {
+      try {
+        const projectsData = await fetch(`/api/projects?_req=${Date.now()}`, { cache: "no-store" }).then(async (res) => {
+          const data = (await res.json()) as ProjectsResponse;
+          if (!res.ok || data.error) throw new Error(data.error || "Failed to load projects");
+          return data;
+        });
+        if (!active) return;
+        setProjects(projectsData.projects);
+      } catch {
+        // Non-blocking: tracker still works without project list.
+      }
+    };
+
+    const loadWeekTotal = async () => {
+      try {
+        const weekData = await fetch(
+          `/api/time-entries/week-total?member=${encodeURIComponent(memberName)}&date=${encodeURIComponent(date)}&_req=${Date.now()}`,
+          {
+            cache: "no-store",
+          }
+        ).then(async (res) => {
+          const data = (await res.json()) as WeekTotalResponse;
+          if (!res.ok || data.error) throw new Error(data.error || "Failed to load weekly summary");
+          return data;
+        });
+        if (!active) return;
+        setWeekTotalSeconds(weekData.totalSeconds ?? 0);
+      } catch {
+        // Non-blocking: week total can be empty while rest of page loads.
+      }
+    };
+
+    void loadPrimary();
+    void loadProjects();
+    void loadWeekTotal();
 
     return () => {
       active = false;
