@@ -37,6 +37,7 @@ create table if not exists public.projects (
   workspace_id bigint not null,
   project_id bigint not null,
   project_name text not null,
+  project_color text not null default '#0EA5E9',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -59,9 +60,23 @@ returns text
 language sql
 stable
 as $$
-  with tokenized as (
-    select lower(trim(value)) as token
-    from regexp_split_to_table(regexp_replace(coalesce(input_name, ''), '[^a-zA-Z0-9]+', ' ', 'g'), '\s+') as value
+  with cleaned as (
+    select
+      regexp_replace(
+        regexp_replace(
+          regexp_replace(
+            regexp_replace(lower(coalesce(input_name, '')), '\byt\b', 'youtube', 'g'),
+            '\bmeetings\b', 'meeting', 'g'
+          ),
+          '\bprep(ing|ping)?\b', 'prepping', 'g'
+        ),
+        '&', ' and ', 'g'
+      ) as value
+  ),
+  tokenized as (
+    select lower(trim(t.value)) as token, t.ord
+    from cleaned c,
+    regexp_split_to_table(regexp_replace(c.value, '[^a-zA-Z0-9]+', ' ', 'g'), '\s+') with ordinality as t(value, ord)
   ),
   member_tokens as (
     select distinct lower(trim(value)) as token
@@ -69,12 +84,26 @@ as $$
     cross join regexp_split_to_table(regexp_replace(coalesce(m.member_name, ''), '[^a-zA-Z0-9]+', ' ', 'g'), '\s+') as value
     where trim(value) <> ''
   )
-  select coalesce(string_agg(t.token, ' '), '')
+  select coalesce(string_agg(t.token, ' ' order by t.ord), '')
   from tokenized t
   where t.token <> ''
+    and t.token not in ('task', 'tasks', 'project', 'projects')
     and not exists (
       select 1 from member_tokens mt where mt.token = t.token
     );
+$$;
+
+create or replace function public.format_project_name(normalized_name text)
+returns text
+language sql
+immutable
+as $$
+  select coalesce(
+    string_agg(upper(left(token, 1)) || substr(token, 2), '-' order by ord),
+    ''
+  )
+  from regexp_split_to_table(coalesce(normalized_name, ''), '\s+') with ordinality as t(token, ord)
+  where trim(token) <> '';
 $$;
 
 create sequence if not exists public.time_entries_id_seq;
@@ -151,6 +180,17 @@ create table if not exists public.member_kpis (
   updated_at timestamptz not null default now(),
   unique (member_name, kpi_label)
 );
+
+create or replace view public.project_rollups as
+select
+  coalesce(a.canonical_project_key, t.project_key) as project_key,
+  sum(t.duration_seconds)::bigint as total_seconds,
+  count(*)::bigint as entry_count
+from public.time_entries t
+left join public.project_aliases a
+  on a.source_project_key = t.project_key
+where t.project_key is not null
+group by coalesce(a.canonical_project_key, t.project_key);
 
 drop trigger if exists trg_members_updated_at on public.members;
 create trigger trg_members_updated_at

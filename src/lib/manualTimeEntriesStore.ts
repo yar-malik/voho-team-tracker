@@ -37,6 +37,9 @@ export type StoredProject = {
   workspace_id: number;
   project_id: number;
   project_name: string;
+  project_color: string;
+  total_seconds?: number;
+  entry_count?: number;
 };
 
 export type StoredMember = {
@@ -123,6 +126,7 @@ async function ensureManualProject(projectName: string | null): Promise<EnsurePr
       workspace_id: workspaceId,
       project_id: projectId,
       project_name: normalized,
+      project_color: "#0EA5E9",
       created_at: nowIso,
       updated_at: nowIso,
     },
@@ -145,13 +149,21 @@ async function ensureManualProject(projectName: string | null): Promise<EnsurePr
 
 export async function listProjects(): Promise<StoredProject[]> {
   if (!isSupabaseConfigured()) return [];
-  const [projectsResponse, aliasesResponse] = await Promise.all([
-    fetch(`${getBaseUrl()}/rest/v1/projects?select=project_key,workspace_id,project_id,project_name&order=project_name.asc`, {
+  const [projectsResponse, aliasesResponse, rollupsResponse] = await Promise.all([
+    fetch(
+      `${getBaseUrl()}/rest/v1/projects?select=project_key,workspace_id,project_id,project_name,project_color&order=project_name.asc`,
+      {
+        method: "GET",
+        headers: supabaseHeaders(),
+        cache: "no-store",
+      }
+    ),
+    fetch(`${getBaseUrl()}/rest/v1/project_aliases?select=source_project_key,canonical_project_key`, {
       method: "GET",
       headers: supabaseHeaders(),
       cache: "no-store",
-    }),
-    fetch(`${getBaseUrl()}/rest/v1/project_aliases?select=source_project_key,canonical_project_key`, {
+    }).catch(() => null),
+    fetch(`${getBaseUrl()}/rest/v1/project_rollups?select=project_key,total_seconds,entry_count`, {
       method: "GET",
       headers: supabaseHeaders(),
       cache: "no-store",
@@ -171,15 +183,37 @@ export async function listProjects(): Promise<StoredProject[]> {
     }
   }
 
+  const rollupMap = new Map<string, { totalSeconds: number; entryCount: number }>();
+  if (rollupsResponse && rollupsResponse.ok) {
+    const rollupRows = (await rollupsResponse.json()) as Array<{
+      project_key?: string;
+      total_seconds?: number;
+      entry_count?: number;
+    }>;
+    for (const row of rollupRows) {
+      if (!row.project_key) continue;
+      rollupMap.set(row.project_key, {
+        totalSeconds: Math.max(0, Number(row.total_seconds ?? 0)),
+        entryCount: Math.max(0, Number(row.entry_count ?? 0)),
+      });
+    }
+  }
+
   const projectByKey = new Map(rows.map((row) => [row.project_key, row] as const));
   const canonical = new Map<string, StoredProject>();
   for (const row of rows) {
     const canonicalKey = aliasMap.get(row.project_key) ?? row.project_key;
-    const canonicalRow = projectByKey.get(canonicalKey) ?? row;
-    if (!canonical.has(canonicalKey)) {
-      canonical.set(canonicalKey, canonicalRow);
+      const canonicalRow = projectByKey.get(canonicalKey) ?? row;
+      if (!canonical.has(canonicalKey)) {
+        const rollup = rollupMap.get(canonicalKey);
+        canonical.set(canonicalKey, {
+          ...canonicalRow,
+          project_color: canonicalRow.project_color || "#0EA5E9",
+          total_seconds: rollup?.totalSeconds ?? 0,
+          entry_count: rollup?.entryCount ?? 0,
+        });
+      }
     }
-  }
 
   return Array.from(canonical.values()).sort((a, b) => a.project_name.localeCompare(b.project_name));
 }
@@ -196,6 +230,52 @@ export async function createProject(projectName: string) {
   return {
     projectKey,
     projectName: savedName,
+    projectColor: "#0EA5E9",
+  };
+}
+
+export async function updateProject(input: { key: string; name?: string | null; color?: string | null }) {
+  const key = input.key.trim();
+  if (!key) throw new Error("Project key is required");
+
+  const patch: Record<string, string> = {};
+  if (typeof input.name === "string") {
+    const normalizedName = normalizeProjectName(input.name);
+    if (!normalizedName) throw new Error("Project name is required");
+    patch.project_name = normalizedName;
+  }
+  if (typeof input.color === "string") {
+    const normalizedColor = input.color.trim();
+    if (!/^#[0-9a-fA-F]{6}$/.test(normalizedColor)) {
+      throw new Error("Invalid project color");
+    }
+    patch.project_color = normalizedColor.toUpperCase();
+  }
+  if (Object.keys(patch).length === 0) {
+    throw new Error("Nothing to update");
+  }
+
+  const response = await fetch(`${getBaseUrl()}/rest/v1/projects?project_key=eq.${encodeURIComponent(key)}`, {
+    method: "PATCH",
+    headers: {
+      ...supabaseHeaders(),
+      Prefer: "return=representation",
+    },
+    body: JSON.stringify(patch),
+    cache: "no-store",
+  });
+  if (!response.ok) throw new Error("Failed to update project");
+  const rows = (await response.json()) as Array<{
+    project_key: string;
+    project_name: string;
+    project_color?: string;
+  }>;
+  const row = rows[0];
+  if (!row) throw new Error("Project not found");
+  return {
+    projectKey: row.project_key,
+    projectName: row.project_name,
+    projectColor: row.project_color ?? "#0EA5E9",
   };
 }
 

@@ -161,6 +161,17 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
   const [entryEditor, setEntryEditor] = useState<EntryEditorState | null>(null);
 
   useEffect(() => {
+    if (!entryEditor) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setEntryEditor(null);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [entryEditor]);
+
+  useEffect(() => {
     const timer = window.setInterval(() => setNowMs(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, []);
@@ -562,34 +573,34 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
 
       {entryEditor && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 p-4">
-          <div className="w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+          <div className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white p-4 shadow-2xl">
             <div className="flex items-center justify-between">
-              <div className="inline-flex items-center gap-2 rounded-full bg-sky-100 px-3 py-1 text-sm font-medium text-sky-800">
-                <span className="inline-flex h-2.5 w-2.5 rounded-full bg-sky-500" />
+              <div className="inline-flex items-center gap-2 rounded-full bg-sky-100 px-2.5 py-1 text-xs font-medium text-sky-800">
+                <span className="inline-flex h-2 w-2 rounded-full bg-sky-500" />
                 Edit time entry
               </div>
-              <button type="button" onClick={() => setEntryEditor(null)} className="text-3xl leading-none text-slate-500">
+              <button type="button" onClick={() => setEntryEditor(null)} className="text-2xl leading-none text-slate-500">
                 ×
               </button>
             </div>
 
-            <div className="mt-4 space-y-4">
+            <div className="mt-3 space-y-3">
               <input
                 type="text"
                 value={entryEditor.description}
                 onChange={(event) => setEntryEditor((prev) => (prev ? { ...prev, description: event.target.value } : prev))}
                 placeholder="Description"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-3xl font-semibold text-slate-900"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-xl font-semibold text-slate-900"
               />
 
-              <div className="flex flex-wrap items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2.5">
                 <input
                   type="text"
                   value={entryEditor.project}
                   onChange={(event) => setEntryEditor((prev) => (prev ? { ...prev, project: event.target.value } : prev))}
                   placeholder="Project"
                   list="project-list"
-                  className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xl text-sky-900"
+                  className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-lg text-sky-900"
                 />
 
                 <div className="flex items-center gap-2">
@@ -597,14 +608,14 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
                     type="time"
                     value={entryEditor.startTime}
                     onChange={(event) => setEntryEditor((prev) => (prev ? { ...prev, startTime: event.target.value } : prev))}
-                    className="rounded-lg border border-slate-300 px-3 py-2 text-2xl"
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-xl"
                   />
-                  <span className="text-3xl text-slate-400">→</span>
+                  <span className="text-2xl text-slate-400">→</span>
                   <input
                     type="time"
                     value={entryEditor.stopTime}
                     onChange={(event) => setEntryEditor((prev) => (prev ? { ...prev, stopTime: event.target.value } : prev))}
-                    className="rounded-lg border border-slate-300 px-3 py-2 text-2xl"
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-xl"
                   />
                 </div>
 
@@ -650,7 +661,7 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
                       }));
                     }
                   }}
-                  className="ml-auto rounded-xl bg-sky-600 px-8 py-3 text-2xl font-semibold text-white disabled:bg-slate-300"
+                  className="ml-auto rounded-lg bg-sky-600 px-6 py-2.5 text-xl font-semibold text-white disabled:bg-slate-300"
                 >
                   {entryEditor.saving ? "Saving..." : "Save"}
                 </button>
