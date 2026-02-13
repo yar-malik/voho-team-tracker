@@ -15,7 +15,7 @@ export default function LoginClient() {
     <div className="min-h-screen bg-[#f4f6fb]">
       <main className="mx-auto flex min-h-screen w-full max-w-[460px] items-center px-6">
         <div className="w-full rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-700">Voho Platform</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-700">Voho Track</p>
           <h1 className="mt-2 text-2xl font-semibold text-slate-900">Sign in</h1>
           <p className="mt-1 text-sm text-slate-600">Use your team account credentials.</p>
 
@@ -68,4 +68,3 @@ export default function LoginClient() {
     </div>
   );
 }
-

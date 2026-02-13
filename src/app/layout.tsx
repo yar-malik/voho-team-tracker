@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Voho Team Overview",
-  description: "Voho Team Overview dashboard",
+  title: "Voho Track",
+  description: "Voho Track dashboard",
 };
 
 export default function RootLayout({

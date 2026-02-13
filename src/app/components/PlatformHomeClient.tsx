@@ -43,7 +43,7 @@ export default function PlatformHomeClient({
     <div className="min-h-screen bg-[#f4f6fb]">
       <div className="mx-auto flex w-full max-w-[1700px] gap-4 px-4 py-4 md:px-6">
         <aside className="sticky top-4 hidden h-[calc(100vh-2rem)] w-[260px] shrink-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:block">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Voho Platform</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Voho Track</p>
           <p className="mt-2 text-sm text-slate-600">{currentUserEmail ?? "Signed in"}</p>
           <nav className="mt-6 space-y-2 text-sm">
             <button
