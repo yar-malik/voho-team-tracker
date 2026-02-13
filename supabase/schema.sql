@@ -44,6 +44,39 @@ create table if not exists public.projects (
 create unique index if not exists idx_projects_workspace_project
   on public.projects (workspace_id, project_id);
 
+create table if not exists public.project_aliases (
+  source_project_key text primary key references public.projects(project_key) on delete cascade,
+  canonical_project_key text not null references public.projects(project_key) on update cascade on delete restrict,
+  normalized_name text null,
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_project_aliases_canonical
+  on public.project_aliases (canonical_project_key);
+
+create or replace function public.normalize_project_name(input_name text)
+returns text
+language sql
+stable
+as $$
+  with tokenized as (
+    select lower(trim(value)) as token
+    from regexp_split_to_table(regexp_replace(coalesce(input_name, ''), '[^a-zA-Z0-9]+', ' ', 'g'), '\s+') as value
+  ),
+  member_tokens as (
+    select distinct lower(trim(value)) as token
+    from public.members m
+    cross join regexp_split_to_table(regexp_replace(coalesce(m.member_name, ''), '[^a-zA-Z0-9]+', ' ', 'g'), '\s+') as value
+    where trim(value) <> ''
+  )
+  select coalesce(string_agg(t.token, ' '), '')
+  from tokenized t
+  where t.token <> ''
+    and not exists (
+      select 1 from member_tokens mt where mt.token = t.token
+    );
+$$;
+
 create sequence if not exists public.time_entries_id_seq;
 
 create table if not exists public.time_entries (
@@ -128,6 +161,12 @@ execute procedure public.set_updated_at();
 drop trigger if exists trg_projects_updated_at on public.projects;
 create trigger trg_projects_updated_at
 before update on public.projects
+for each row
+execute procedure public.set_updated_at();
+
+drop trigger if exists trg_project_aliases_updated_at on public.project_aliases;
+create trigger trg_project_aliases_updated_at
+before update on public.project_aliases
 for each row
 execute procedure public.set_updated_at();
 

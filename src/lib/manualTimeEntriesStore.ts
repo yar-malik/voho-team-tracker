@@ -145,16 +145,43 @@ async function ensureManualProject(projectName: string | null): Promise<EnsurePr
 
 export async function listProjects(): Promise<StoredProject[]> {
   if (!isSupabaseConfigured()) return [];
-  const url = `${getBaseUrl()}/rest/v1/projects?select=project_key,workspace_id,project_id,project_name&order=project_name.asc`;
-  const response = await fetch(url, {
-    method: "GET",
-    headers: supabaseHeaders(),
-    cache: "no-store",
-  });
-  if (!response.ok) return [];
-  const rows = (await response.json()) as StoredProject[];
+  const [projectsResponse, aliasesResponse] = await Promise.all([
+    fetch(`${getBaseUrl()}/rest/v1/projects?select=project_key,workspace_id,project_id,project_name&order=project_name.asc`, {
+      method: "GET",
+      headers: supabaseHeaders(),
+      cache: "no-store",
+    }),
+    fetch(`${getBaseUrl()}/rest/v1/project_aliases?select=source_project_key,canonical_project_key`, {
+      method: "GET",
+      headers: supabaseHeaders(),
+      cache: "no-store",
+    }).catch(() => null),
+  ]);
+
+  if (!projectsResponse.ok) return [];
+  const rows = (await projectsResponse.json()) as StoredProject[];
   if (!Array.isArray(rows)) return [];
-  return rows;
+
+  const aliasMap = new Map<string, string>();
+  if (aliasesResponse && aliasesResponse.ok) {
+    const aliasRows = (await aliasesResponse.json()) as Array<{ source_project_key?: string; canonical_project_key?: string }>;
+    for (const row of aliasRows) {
+      if (!row.source_project_key || !row.canonical_project_key) continue;
+      aliasMap.set(row.source_project_key, row.canonical_project_key);
+    }
+  }
+
+  const projectByKey = new Map(rows.map((row) => [row.project_key, row] as const));
+  const canonical = new Map<string, StoredProject>();
+  for (const row of rows) {
+    const canonicalKey = aliasMap.get(row.project_key) ?? row.project_key;
+    const canonicalRow = projectByKey.get(canonicalKey) ?? row;
+    if (!canonical.has(canonicalKey)) {
+      canonical.set(canonicalKey, canonicalRow);
+    }
+  }
+
+  return Array.from(canonical.values()).sort((a, b) => a.project_name.localeCompare(b.project_name));
 }
 
 export async function createProject(projectName: string) {

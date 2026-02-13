@@ -57,6 +57,36 @@ async function insertRows(table: string, rows: unknown[]) {
   }).catch(() => undefined);
 }
 
+type ProjectAliasRow = {
+  source_project_key: string;
+  canonical_project_key: string;
+};
+
+async function fetchProjectAliasMap(projectKeys: string[]): Promise<Map<string, string>> {
+  const aliasMap = new Map<string, string>();
+  if (!isSupabaseConfigured() || projectKeys.length === 0) return aliasMap;
+
+  const base = process.env.SUPABASE_URL!;
+  const escaped = projectKeys.map((key) => `"${key.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`).join(",");
+  const filter = `in.(${escaped})`;
+  const response = await fetch(
+    `${base}/rest/v1/project_aliases?select=source_project_key,canonical_project_key&source_project_key=${encodeURIComponent(filter)}`,
+    {
+      method: "GET",
+      headers: supabaseHeaders(),
+      cache: "no-store",
+    }
+  ).catch(() => null);
+  if (!response || !response.ok) return aliasMap;
+
+  const rows = (await response.json()) as ProjectAliasRow[];
+  for (const row of rows) {
+    if (!row.source_project_key || !row.canonical_project_key) continue;
+    aliasMap.set(row.source_project_key, row.canonical_project_key);
+  }
+  return aliasMap;
+}
+
 function getWorkspaceId(entry: Pick<EntryForHistory, "workspace_id" | "wid">) {
   if (typeof entry.workspace_id === "number") return entry.workspace_id;
   if (typeof entry.wid === "number") return entry.wid;
@@ -91,7 +121,7 @@ export async function persistHistoricalSnapshot(
 
   const memberRows = [{ member_name: memberName }];
   const projectRows = new Map<string, { project_key: string; workspace_id: number; project_id: number; project_name: string }>();
-  const entryRows = entries.map((entry) => {
+  const preparedEntries = entries.map((entry) => {
     const projectKey = getProjectKey(entry);
     if (projectKey) {
       const workspaceId = getWorkspaceId(entry);
@@ -106,6 +136,7 @@ export async function persistHistoricalSnapshot(
     }
 
     return {
+      rawProjectKey: projectKey,
       toggl_entry_id: entry.id,
       entry_source: "toggl",
       source_entry_id: String(entry.id),
@@ -122,6 +153,23 @@ export async function persistHistoricalSnapshot(
       raw: entry,
     };
   });
+  const aliasMap = await fetchProjectAliasMap(Array.from(projectRows.keys()));
+  const entryRows = preparedEntries.map((row) => ({
+    toggl_entry_id: row.toggl_entry_id,
+    entry_source: row.entry_source,
+    source_entry_id: row.source_entry_id,
+    member_name: row.member_name,
+    project_key: row.rawProjectKey ? aliasMap.get(row.rawProjectKey) ?? row.rawProjectKey : null,
+    description: row.description,
+    start_at: row.start_at,
+    stop_at: row.stop_at,
+    duration_seconds: row.duration_seconds,
+    is_running: row.is_running,
+    tags: row.tags,
+    source_date: row.source_date,
+    synced_at: row.synced_at,
+    raw: row.raw,
+  }));
 
   const totalSeconds = entryRows.reduce((acc, row) => acc + row.duration_seconds, 0);
   const statsRows = [
