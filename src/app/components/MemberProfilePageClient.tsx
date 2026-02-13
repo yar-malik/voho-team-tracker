@@ -437,28 +437,7 @@ export default function MemberProfilePageClient({
   };
 
   return (
-    <div className="min-h-screen bg-[#f4f6fb]">
-      <div className="mx-auto flex w-full max-w-[1700px] gap-4 px-4 py-4 md:px-6">
-        <aside className="sticky top-4 hidden h-[calc(100vh-2rem)] w-[250px] shrink-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:block">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Voho Tracker</p>
-          <h2 className="mt-2 text-xl font-semibold text-slate-900">{memberName}</h2>
-          <nav className="mt-6 space-y-2 text-sm">
-            <a href="#track" className="block rounded-lg bg-slate-900 px-3 py-2 font-medium text-white">Track</a>
-            <a href="#calendar" className="block rounded-lg px-3 py-2 font-medium text-slate-700 hover:bg-slate-100">Calendar</a>
-            <a href="#projects" className="block rounded-lg px-3 py-2 font-medium text-slate-700 hover:bg-slate-100">Projects</a>
-            <a href="#members" className="block rounded-lg px-3 py-2 font-medium text-slate-700 hover:bg-slate-100">Members</a>
-            <a href="#kpis" className="block rounded-lg px-3 py-2 font-medium text-slate-700 hover:bg-slate-100">KPIs</a>
-            <a href="#insights" className="block rounded-lg px-3 py-2 font-medium text-slate-700 hover:bg-slate-100">Insights</a>
-          </nav>
-          <div className="mt-8 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
-            Data source: Supabase first. This tracker works without Google Sheets.
-          </div>
-          <Link href="/" className="mt-4 inline-block rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700">
-            Back to dashboard
-          </Link>
-        </aside>
-
-        <main className="min-w-0 flex-1 space-y-4">
+    <div className="space-y-4">
           <section id="track" className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
@@ -741,8 +720,6 @@ export default function MemberProfilePageClient({
               </section>
             </div>
           </div>
-        </main>
-      </div>
     </div>
   );
 }
