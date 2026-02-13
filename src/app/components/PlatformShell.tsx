@@ -317,15 +317,16 @@ export default function PlatformShell({
                     <span>KPIs</span>
                   </span>
                 </Link>
-                <Link href="/settings" prefetch className={navClass(isActive(pathname, "/settings"))}>
-                  <span className="inline-flex items-center gap-2">
-                    <SettingsIcon className={iconClass()} />
-                    <span>Settings</span>
-                  </span>
-                </Link>
               </div>
             </div>
           </nav>
+
+          <Link href="/settings" prefetch className={navClass(isActive(pathname, "/settings"))}>
+            <span className="inline-flex items-center gap-2">
+              <SettingsIcon className={iconClass()} />
+              <span>Settings</span>
+            </span>
+          </Link>
 
           <div className="mt-4 rounded-xl border border-slate-200 bg-sky-50 p-3 text-xs text-slate-600">
             <p className="font-semibold text-slate-700">Tip</p>
