@@ -1,20 +1,25 @@
 import TrackPageClient from "@/app/components/TrackPageClient";
 import { getCurrentUserContext } from "@/lib/authorization";
 import { getMemberNameByEmail, listMemberProfiles } from "@/lib/manualTimeEntriesStore";
+import { cookies } from "next/headers";
 
 export default async function TrackPage() {
   const context = await getCurrentUserContext();
-  const memberNameByEmail = context?.email ? await getMemberNameByEmail(context.email) : null;
+  const cookieStore = await cookies();
+  const cookieEmail = cookieStore.get("voho_user_email")?.value ?? null;
+  const resolvedEmail = context?.email ?? cookieEmail;
+
+  const memberNameByEmail = resolvedEmail ? await getMemberNameByEmail(resolvedEmail) : null;
   let memberName = memberNameByEmail;
 
-  if (!memberName && context?.email) {
+  if (!memberName && resolvedEmail) {
     const members = await listMemberProfiles();
     const byEmail = new Map(
       members
         .filter((member) => member.email)
         .map((member) => [member.email!.trim().toLowerCase(), member.name] as const)
     );
-    memberName = byEmail.get(context.email.trim().toLowerCase()) ?? null;
+    memberName = byEmail.get(resolvedEmail.trim().toLowerCase()) ?? null;
   }
 
   if (!memberName) {
