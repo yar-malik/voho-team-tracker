@@ -1144,8 +1144,14 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
       </div>
 
       {entryEditor && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 p-4">
-          <div className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white p-4 shadow-2xl">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 p-4"
+          onClick={() => setEntryEditor(null)}
+        >
+          <div
+            className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white p-4 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
             <div className="flex items-center justify-between">
               <div className="inline-flex items-center gap-2 rounded-full bg-sky-100 px-2.5 py-1 text-xs font-medium text-sky-800">
                 <span className="inline-flex h-2 w-2 rounded-full bg-sky-500" />

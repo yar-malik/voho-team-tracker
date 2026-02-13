@@ -18,26 +18,28 @@ function supabaseHeaders() {
 export async function getCurrentUserContext() {
   const cookieStore = await cookies();
   const accessToken = cookieStore.get("voho_access_token")?.value ?? "";
+  const fallbackEmail = cookieStore.get("voho_user_email")?.value?.trim() ?? "";
   const authUser = await getUserFromAccessToken(accessToken);
-  if (!authUser?.email) return null;
+  const resolvedEmail = authUser?.email?.trim() || fallbackEmail;
+  if (!resolvedEmail) return null;
   if (!isSupabaseConfigured()) {
-    return { email: authUser.email, role: "member" };
+    return { email: resolvedEmail, role: "member" };
   }
 
   const url =
     `${process.env.SUPABASE_URL!}/rest/v1/members` +
     `?select=member_name,email,role` +
-    `&email=eq.${encodeURIComponent(authUser.email)}` +
+    `&email=eq.${encodeURIComponent(resolvedEmail)}` +
     `&limit=1`;
   const response = await fetch(url, {
     method: "GET",
     headers: supabaseHeaders(),
     cache: "no-store",
   });
-  if (!response.ok) return { email: authUser.email, role: "member" };
+  if (!response.ok) return { email: resolvedEmail, role: "member" };
   const rows = (await response.json()) as Array<{ role?: string }>;
   return {
-    email: authUser.email,
+    email: resolvedEmail,
     role: rows[0]?.role ?? "member",
   };
 }

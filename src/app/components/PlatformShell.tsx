@@ -78,6 +78,23 @@ function KpiIcon({ className }: IconProps) {
   );
 }
 
+function SettingsIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={className} aria-hidden="true">
+      <path
+        d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M20 12a8.8 8.8 0 0 0-.1-1.3l2-1.5-2-3.5-2.5 1a8.9 8.9 0 0 0-2.2-1.2l-.4-2.6H9.2l-.4 2.6a8.9 8.9 0 0 0-2.2 1.2l-2.5-1-2 3.5 2 1.5A8.7 8.7 0 0 0 4 12c0 .4 0 .9.1 1.3l-2 1.5 2 3.5 2.5-1c.7.5 1.4.9 2.2 1.2l.4 2.6h5.6l.4-2.6c.8-.3 1.5-.7 2.2-1.2l2.5 1 2-3.5-2-1.5c.1-.4.1-.9.1-1.3Z"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function isActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
   return pathname === href || pathname.startsWith(`${href}/`);
@@ -215,7 +232,7 @@ export default function PlatformShell({
         <aside className="sticky top-4 hidden h-[calc(100vh-2rem)] w-[280px] shrink-0 rounded-3xl border border-slate-200 bg-white/90 p-4 shadow-[0_20px_40px_rgba(15,23,42,0.08)] backdrop-blur lg:flex lg:flex-col">
           <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-sky-50 to-cyan-50 p-3 shadow-sm">
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Voho Track</p>
-            <p className="mt-1 truncate text-sm font-medium text-slate-700">{currentUserEmail ?? "Signed in"}</p>
+            <p className="mt-1 truncate text-sm font-medium text-slate-700">{currentMemberName ?? currentUserEmail ?? "Signed in"}</p>
           </div>
 
           <nav className="mt-5 flex-1 space-y-4">
@@ -283,6 +300,12 @@ export default function PlatformShell({
                   <span className="inline-flex items-center gap-2">
                     <KpiIcon className={iconClass()} />
                     <span>KPIs</span>
+                  </span>
+                </Link>
+                <Link href="/settings" prefetch className={navClass(isActive(pathname, "/settings"))}>
+                  <span className="inline-flex items-center gap-2">
+                    <SettingsIcon className={iconClass()} />
+                    <span>Settings</span>
                   </span>
                 </Link>
               </div>
