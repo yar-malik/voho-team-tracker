@@ -126,7 +126,13 @@ async function readStoredTeam(
 
   let latestSyncedAt: string | null = null;
   for (const row of rows) {
-    latestSyncedAt = latestSyncedAt ? (row.synced_at > latestSyncedAt ? row.synced_at : latestSyncedAt) : row.synced_at;
+    const syncedAt = row.synced_at;
+    if (
+      !latestSyncedAt ||
+      new Date(syncedAt).getTime() > new Date(latestSyncedAt).getTime()
+    ) {
+      latestSyncedAt = syncedAt;
+    }
     const bucket = grouped.get(row.member_name);
     if (!bucket) continue;
     const entry = {

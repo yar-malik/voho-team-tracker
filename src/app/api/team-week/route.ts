@@ -138,7 +138,13 @@ async function readStoredWeek(
 
   let latestUpdatedAt: string | null = null;
   for (const row of rows) {
-    latestUpdatedAt = latestUpdatedAt ? (row.updated_at > latestUpdatedAt ? row.updated_at : latestUpdatedAt) : row.updated_at;
+    const updatedAt = row.updated_at;
+    if (
+      !latestUpdatedAt ||
+      new Date(updatedAt).getTime() > new Date(latestUpdatedAt).getTime()
+    ) {
+      latestUpdatedAt = updatedAt;
+    }
     const member = grouped.get(row.member_name);
     if (!member) continue;
     const day = member.days.find((item) => item.date === row.stat_date);
