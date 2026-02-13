@@ -641,6 +641,20 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
     return () => window.clearInterval(intervalId);
   }, []);
 
+  useEffect(() => {
+    const scrollToProfileFromHash = () => {
+      const hash = window.location.hash;
+      if (!hash.startsWith("#profile-")) return;
+      const target = document.getElementById(hash.slice(1));
+      if (!target) return;
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+
+    scrollToProfileFromHash();
+    window.addEventListener("hashchange", scrollToProfileFromHash);
+    return () => window.removeEventListener("hashchange", scrollToProfileFromHash);
+  }, [memberProfiles, mode]);
+
   const runningEntry = useMemo(() => {
     if (!data?.current) return null;
     if (data.current.duration >= 0) return null;
