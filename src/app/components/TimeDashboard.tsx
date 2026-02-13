@@ -570,7 +570,6 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
     const intervalId = window.setInterval(() => {
       if (document.visibilityState === "hidden") return;
       refreshSourceRef.current = "auto";
-      forceRefreshRef.current = true;
       setManualRefreshTick((value) => value + 1);
     }, AUTO_REFRESH_INTERVAL_MS);
 
@@ -766,7 +765,7 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
           <p className="text-xs text-slate-500">
             Last updated:{" "}
             {lastUpdateMeta
-              ? `${formatDateTime(lastUpdateMeta.at)} (${lastUpdateMeta.source === "manual" ? "Refresh now" : lastUpdateMeta.source === "auto" ? "automatic refresh" : "cached load"})`
+              ? `${formatDateTime(lastUpdateMeta.at)} (${lastUpdateMeta.source === "manual" ? "Refresh now (Toggl sync)" : lastUpdateMeta.source === "auto" ? "automatic cached check" : "cached load"})`
               : "—"}
           </p>
         </div>
@@ -1027,8 +1026,8 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
                 Notes
               </h3>
               <p className="mt-2 text-sm text-slate-500">
-                Entries refresh when you change the date or teammate, and also every 15 minutes automatically.
-                Data stays on the server, and requests are lightly cached to reduce rate limits.
+                Entries auto-refresh from cache when you change filters and every 15 minutes. Toggl is called only
+                when you click Refresh now, and results are saved to the database cache.
               </p>
             </div>
             </div>

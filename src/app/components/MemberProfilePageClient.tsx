@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type MemberProfileResponse = {
   startDate: string;
@@ -68,6 +68,7 @@ export default function MemberProfilePageClient({
   const [refreshTick, setRefreshTick] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [payload, setPayload] = useState<MemberProfileResponse | null>(null);
+  const forceRefreshRef = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -76,8 +77,10 @@ export default function MemberProfilePageClient({
       member: memberName,
       date,
       tzOffset: String(new Date().getTimezoneOffset()),
-      refresh: "1",
     });
+    if (forceRefreshRef.current) {
+      params.set("refresh", "1");
+    }
 
     fetch(`/api/member-profiles?${params.toString()}`)
       .then(async (res) => {
@@ -96,6 +99,9 @@ export default function MemberProfilePageClient({
         if (!active) return;
         setError(err.message);
         setPayload(null);
+      })
+      .finally(() => {
+        forceRefreshRef.current = false;
       });
 
     return () => {
@@ -132,7 +138,10 @@ export default function MemberProfilePageClient({
             </Link>
             <button
               type="button"
-              onClick={() => setRefreshTick((value) => value + 1)}
+              onClick={() => {
+                forceRefreshRef.current = true;
+                setRefreshTick((value) => value + 1);
+              }}
               className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white"
             >
               Refresh now
@@ -148,7 +157,9 @@ export default function MemberProfilePageClient({
             value={date}
             onChange={(event) => setDate(event.target.value)}
           />
-          <p className="mt-2 text-xs text-slate-500">Auto-refreshes every 15 minutes while this page is open.</p>
+          <p className="mt-2 text-xs text-slate-500">
+            Auto-refresh checks cached data every 15 minutes. Toggl is called only when you click Refresh now.
+          </p>
         </div>
 
         {!payload && !error && (

@@ -52,6 +52,24 @@ type CacheEntry = {
   aiWarning?: string | null;
 };
 
+function createEmptyProfile(name: string, weekDates: string[]): MemberProfile {
+  return {
+    name,
+    totalSeconds: 0,
+    entryCount: 0,
+    activeDays: 0,
+    averageDailySeconds: 0,
+    averageEntrySeconds: 0,
+    uniqueProjects: 0,
+    uniqueDescriptions: 0,
+    topProject: "No project",
+    topProjectSharePct: 0,
+    days: weekDates.map((date) => ({ date, seconds: 0, entryCount: 0 })),
+    workItems: [],
+    aiAnalysis: null,
+  };
+}
+
 function parseTzOffsetMinutes(value: string | null): number {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return 0;
@@ -223,6 +241,19 @@ export async function GET(request: NextRequest) {
   if (memberParam && members.length === 0) {
     return NextResponse.json({ error: "Unknown member" }, { status: 404 });
   }
+  if (!forceRefresh && !cachedAny) {
+    return NextResponse.json({
+      startDate,
+      endDate,
+      weekDates,
+      members: members.map((member) => createEmptyProfile(member.name, weekDates)),
+      cachedAt: new Date().toISOString(),
+      stale: true,
+      warning: "No cached profile snapshot yet. Click Refresh now to fetch and save latest data.",
+      aiEnabled: Boolean(process.env.OPENAI_API_KEY),
+      aiWarning: null,
+    });
+  }
 
   const range = buildUtcRangeFromLocalDates(startDate, endDate, tzOffsetMinutes);
   const aiEnabled = Boolean(process.env.OPENAI_API_KEY);
@@ -233,21 +264,7 @@ export async function GET(request: NextRequest) {
         const emptyDays = weekDates.map((date) => ({ date, seconds: 0, entryCount: 0 }));
         const token = getTokenForMember(member.name);
         if (!token) {
-          return {
-            name: member.name,
-            totalSeconds: 0,
-            entryCount: 0,
-            activeDays: 0,
-            averageDailySeconds: 0,
-            averageEntrySeconds: 0,
-            uniqueProjects: 0,
-            uniqueDescriptions: 0,
-            topProject: "No project",
-            topProjectSharePct: 0,
-            days: emptyDays,
-            workItems: [],
-            aiAnalysis: null,
-          } satisfies MemberProfile;
+          return { ...createEmptyProfile(member.name, weekDates), days: emptyDays } satisfies MemberProfile;
         }
 
         const entries = await fetchTimeEntries(token, range.startIso, range.endIso);
