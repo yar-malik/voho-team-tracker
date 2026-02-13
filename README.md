@@ -59,6 +59,22 @@ OPENAI_MODEL=gpt-4.1-mini
 
 `OPENAI_MODEL` is optional. If omitted, the app defaults to `gpt-4.1-mini`.
 
+## KPI Sheet Setup (Optional)
+
+You can override member KPIs from a Google Sheet CSV (for example, only for specific teammates) while auto-generating KPIs for everyone else.
+
+1. In Google Sheets, use **File -> Share -> Publish to web** (CSV) or use an export URL.
+2. Add to env:
+
+```bash
+KPI_SHEET_CSV_URL=https://docs.google.com/spreadsheets/d/<sheet-id>/export?format=csv&gid=<gid>
+```
+
+CSV requirements:
+- Include a member column named `member`, `name`, or `teammate`.
+- Each other column is treated as a KPI (`column name` = KPI label, cell value = KPI value).
+- Rows only for Abdullah/Hammaad/Rehman are fine; others will use automatic KPIs.
+
 ## Historical Data Stored
 
 When you click **Refresh view**, the app now persists historical records to Supabase:
