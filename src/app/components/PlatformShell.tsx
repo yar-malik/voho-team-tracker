@@ -10,6 +10,11 @@ function navClass(active: boolean) {
   }`;
 }
 
+function isActive(pathname: string, href: string) {
+  if (href === "/") return pathname === "/";
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
 export default function PlatformShell({
   children,
   currentUserEmail,
@@ -27,19 +32,22 @@ export default function PlatformShell({
           <p className="mt-2 text-sm text-slate-600">{currentUserEmail ?? "Signed in"}</p>
 
           <nav className="mt-6 space-y-2">
-            <Link href="/reports" className={navClass(pathname === "/reports")}>
+            <Link href="/reports" className={navClass(isActive(pathname, "/reports"))}>
               Reports
             </Link>
-            <Link href="/team-overview" className={navClass(pathname === "/team-overview")}>
+            <Link href="/track" className={navClass(isActive(pathname, "/track"))}>
+              Tracking
+            </Link>
+            <Link href="/team-overview" className={navClass(isActive(pathname, "/team-overview"))}>
               Team overview
             </Link>
-            <Link href="/projects" className={navClass(pathname === "/projects")}>
+            <Link href="/projects" className={navClass(isActive(pathname, "/projects"))}>
               Projects
             </Link>
-            <Link href="/members" className={navClass(pathname === "/members")}>
+            <Link href="/members" className={navClass(isActive(pathname, "/members") || isActive(pathname, "/member"))}>
               Members
             </Link>
-            <Link href="/kpis" className={navClass(pathname === "/kpis")}>
+            <Link href="/kpis" className={navClass(isActive(pathname, "/kpis"))}>
               KPIs
             </Link>
           </nav>
@@ -61,4 +69,3 @@ export default function PlatformShell({
     </div>
   );
 }
-
