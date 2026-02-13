@@ -59,6 +59,38 @@ function formatTimer(totalSeconds: number): string {
   return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
+function parseDurationInputToMinutes(input: string): number | null {
+  const value = input.trim().toLowerCase();
+  if (!value) return null;
+
+  if (/^\d+$/.test(value)) {
+    const minutes = Number(value);
+    return Number.isFinite(minutes) && minutes > 0 ? minutes : null;
+  }
+
+  if (/^\d{1,2}:\d{1,2}$/.test(value)) {
+    const [h, m] = value.split(":").map(Number);
+    const minutes = h * 60 + m;
+    return Number.isFinite(minutes) && minutes > 0 ? minutes : null;
+  }
+
+  let totalMinutes = 0;
+  const hourMatches = value.match(/(\d+)\s*h(?:our|ours)?/g) ?? [];
+  const minuteMatches = value.match(/(\d+)\s*m(?:in|ins|inute|inutes)?/g) ?? [];
+
+  for (const match of hourMatches) {
+    const parsed = Number(match.match(/\d+/)?.[0] ?? 0);
+    totalMinutes += parsed * 60;
+  }
+  for (const match of minuteMatches) {
+    const parsed = Number(match.match(/\d+/)?.[0] ?? 0);
+    totalMinutes += parsed;
+  }
+
+  if (totalMinutes > 0) return totalMinutes;
+  return null;
+}
+
 function formatLocalDateInput(date: Date): string {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
@@ -212,6 +244,7 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
 
   const [description, setDescription] = useState("");
   const [projectName, setProjectName] = useState("");
+  const [quickDurationInput, setQuickDurationInput] = useState("");
   const [calendarDraft, setCalendarDraft] = useState<CalendarDraft | null>(null);
   const [draftDurationMinutes, setDraftDurationMinutes] = useState("60");
   const [entryEditor, setEntryEditor] = useState<EntryEditorState | null>(null);
@@ -345,6 +378,34 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
     window.dispatchEvent(new CustomEvent("voho-timer-changed", { detail }));
   }
 
+  async function createQuickDurationEntry(rawDuration: string) {
+    const minutes = parseDurationInputToMinutes(rawDuration);
+    if (!minutes || minutes <= 0) {
+      throw new Error("Use a valid duration like 15m, 20 min, 1h 30m, or 1:15");
+    }
+    const now = new Date();
+    const startAt = new Date(now.getTime() - minutes * 60 * 1000).toISOString();
+
+    const res = await fetch("/api/time-entries/manual", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        member: memberName,
+        description,
+        project: projectName,
+        startAt,
+        durationMinutes: minutes,
+        tzOffset: new Date().getTimezoneOffset(),
+      }),
+    });
+    const data = (await res.json()) as { error?: string };
+    if (!res.ok || data.error) {
+      throw new Error(data.error || "Failed to add entry");
+    }
+    setQuickDurationInput("");
+    setRefreshTick((v) => v + 1);
+  }
+
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="border-b border-slate-200 px-5 py-4">
@@ -373,7 +434,32 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
               ))}
             </datalist>
 
-            <p className="min-w-[95px] text-right text-3xl font-semibold tabular-nums text-slate-900">{formatTimer(runningSeconds)}</p>
+            {currentTimer ? (
+              <p className="min-w-[95px] text-right text-3xl font-semibold tabular-nums text-slate-900">{formatTimer(runningSeconds)}</p>
+            ) : (
+              <input
+                type="text"
+                value={quickDurationInput}
+                onChange={(event) => setQuickDurationInput(event.target.value)}
+                onKeyDown={async (event) => {
+                  if (event.key !== "Enter") return;
+                  event.preventDefault();
+                  if (busy) return;
+                  setBusy(true);
+                  setError(null);
+                  try {
+                    await createQuickDurationEntry(quickDurationInput);
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : "Failed to add entry");
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+                placeholder="15m"
+                className="w-[110px] rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-right text-2xl font-semibold tabular-nums text-slate-900 outline-none focus:border-sky-400"
+                title="Type duration: 15m, 20 min, 1h 30m, 1:15, or 90"
+              />
+            )}
 
             <button
               type="button"
@@ -382,6 +468,11 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
                 setBusy(true);
                 setError(null);
                 try {
+                  const smartDuration = parseDurationInputToMinutes(quickDurationInput);
+                  if (smartDuration && smartDuration > 0) {
+                    await createQuickDurationEntry(quickDurationInput);
+                    return;
+                  }
                   const res = await fetch("/api/time-entries/start", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
