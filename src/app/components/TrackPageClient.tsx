@@ -58,6 +58,23 @@ function formatTimer(totalSeconds: number): string {
   return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
+function formatLocalDateInput(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function shiftDateInput(dateInput: string, deltaDays: number): string {
+  const [year, month, day] = dateInput.split("-").map(Number);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+    return formatLocalDateInput(new Date());
+  }
+  const utc = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+  utc.setUTCDate(utc.getUTCDate() + deltaDays);
+  return utc.toISOString().slice(0, 10);
+}
+
 function formatDurationShort(totalSeconds: number): string {
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
@@ -107,7 +124,7 @@ function buildWeekDays(dateInput: string) {
   return Array.from({ length: 7 }, (_, idx) => {
     const d = new Date(start);
     d.setDate(start.getDate() + idx);
-    const value = d.toISOString().slice(0, 10);
+    const value = formatLocalDateInput(d);
     return {
       value,
       short: d.toLocaleDateString([], { weekday: "short" }),
@@ -144,7 +161,7 @@ function projectColorClass(project: string) {
 }
 
 export default function TrackPageClient({ memberName }: { memberName: string }) {
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(formatLocalDateInput(new Date()));
   const [refreshTick, setRefreshTick] = useState(0);
   const [entries, setEntries] = useState<EntriesResponse | null>(null);
   const [currentTimer, setCurrentTimer] = useState<CurrentTimerResponse["current"]>(null);
@@ -394,9 +411,7 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
           <button
             type="button"
             onClick={() => {
-              const d = new Date(`${date}T00:00:00`);
-              d.setDate(d.getDate() - 1);
-              setDate(d.toISOString().slice(0, 10));
+              setDate(shiftDateInput(date, -1));
             }}
             className="rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-700"
           >
@@ -404,7 +419,7 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
           </button>
           <button
             type="button"
-            onClick={() => setDate(new Date().toISOString().slice(0, 10))}
+            onClick={() => setDate(formatLocalDateInput(new Date()))}
             className="rounded-md border border-slate-300 bg-slate-50 px-3 py-1 text-sm text-slate-700"
           >
             Today
@@ -412,9 +427,7 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
           <button
             type="button"
             onClick={() => {
-              const d = new Date(`${date}T00:00:00`);
-              d.setDate(d.getDate() + 1);
-              setDate(d.toISOString().slice(0, 10));
+              setDate(shiftDateInput(date, 1));
             }}
             className="rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-700"
           >
@@ -445,17 +458,12 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
           </div>
 
           <p className="ml-auto text-sm font-semibold text-slate-700">WEEK TOTAL {formatDurationShort(weekTotalSeconds)}</p>
-          <div className="flex overflow-hidden rounded-md border border-slate-300">
-            <span className="bg-sky-100 px-3 py-1 text-sm font-medium text-sky-800">Calendar</span>
-            <span className="px-3 py-1 text-sm text-slate-700">List view</span>
-            <span className="px-3 py-1 text-sm text-slate-700">Timesheet</span>
-          </div>
         </div>
         {entries?.warning && <p className="mt-2 text-xs text-amber-700">{entries.warning}</p>}
         {error && <p className="mt-2 text-xs text-rose-700">{error}</p>}
       </div>
 
-      <div className="grid min-h-[620px] grid-cols-1 xl:grid-cols-[1fr_320px]">
+      <div className="min-h-[620px]">
         <section className="relative border-r border-slate-200">
           {calendarDraft && (
             <div className="border-b border-slate-200 bg-slate-50 px-4 py-2 text-sm">
@@ -562,13 +570,6 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
             </div>
           </div>
         </section>
-
-        <aside className="hidden bg-slate-50/70 p-4 xl:block">
-          <div className="rounded-xl border border-slate-200 bg-white p-4">
-            <p className="text-sm font-semibold text-slate-800">Goals</p>
-            <p className="mt-3 text-sm text-slate-500">Create a goal</p>
-          </div>
-        </aside>
       </div>
 
       {entryEditor && (
