@@ -26,6 +26,12 @@ type WorkItemSummary = {
   entryCount: number;
 };
 
+type KpiItem = {
+  label: string;
+  value: string;
+  source: "sheet" | "auto";
+};
+
 type MemberProfile = {
   name: string;
   totalSeconds: number;
@@ -39,6 +45,7 @@ type MemberProfile = {
   topProjectSharePct: number;
   days: DaySummary[];
   workItems: WorkItemSummary[];
+  kpis: KpiItem[];
   aiAnalysis: string | null;
 };
 
@@ -53,6 +60,13 @@ type CacheEntry = {
 };
 
 function createEmptyProfile(name: string, weekDates: string[]): MemberProfile {
+  const kpis: KpiItem[] = [
+    { label: "Active days", value: "0/7", source: "auto" },
+    { label: "Avg/day", value: "0h 0m", source: "auto" },
+    { label: "Avg entry", value: "0h 0m", source: "auto" },
+    { label: "Unique projects", value: "0", source: "auto" },
+    { label: "Top project share", value: "No project (0%)", source: "auto" },
+  ];
   return {
     name,
     totalSeconds: 0,
@@ -66,8 +80,102 @@ function createEmptyProfile(name: string, weekDates: string[]): MemberProfile {
     topProjectSharePct: 0,
     days: weekDates.map((date) => ({ date, seconds: 0, entryCount: 0 })),
     workItems: [],
+    kpis,
     aiAnalysis: null,
   };
+}
+
+function formatDuration(totalSeconds: number): string {
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  return `${hours}h ${minutes}m`;
+}
+
+function buildAutoKpis(profile: Pick<MemberProfile, "activeDays" | "averageDailySeconds" | "averageEntrySeconds" | "uniqueProjects" | "topProject" | "topProjectSharePct">): KpiItem[] {
+  return [
+    { label: "Active days", value: `${profile.activeDays}/7`, source: "auto" },
+    { label: "Avg/day", value: formatDuration(profile.averageDailySeconds), source: "auto" },
+    { label: "Avg entry", value: formatDuration(profile.averageEntrySeconds), source: "auto" },
+    { label: "Unique projects", value: String(profile.uniqueProjects), source: "auto" },
+    { label: "Top project share", value: `${profile.topProject} (${profile.topProjectSharePct}%)`, source: "auto" },
+  ];
+}
+
+function normalizeMemberKey(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function parseCsvLine(line: string): string[] {
+  const values: string[] = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i += 1) {
+    const char = line[i];
+    const next = line[i + 1];
+    if (char === '"' && inQuotes && next === '"') {
+      current += '"';
+      i += 1;
+      continue;
+    }
+    if (char === '"') {
+      inQuotes = !inQuotes;
+      continue;
+    }
+    if (char === "," && !inQuotes) {
+      values.push(current.trim());
+      current = "";
+      continue;
+    }
+    current += char;
+  }
+  values.push(current.trim());
+  return values;
+}
+
+async function fetchKpiOverridesFromCsv(): Promise<Map<string, KpiItem[]>> {
+  const url = process.env.KPI_SHEET_CSV_URL?.trim();
+  if (!url) return new Map();
+
+  try {
+    const response = await fetch(url, { cache: "no-store" });
+    if (!response.ok) return new Map();
+    const text = await response.text();
+    const lines = text
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+    if (lines.length < 2) return new Map();
+
+    const header = parseCsvLine(lines[0]);
+    const memberColumnIndex = header.findIndex((column) => {
+      const name = column.trim().toLowerCase();
+      return name === "member" || name === "name" || name === "teammate";
+    });
+    if (memberColumnIndex < 0) return new Map();
+
+    const map = new Map<string, KpiItem[]>();
+    for (let i = 1; i < lines.length; i += 1) {
+      const row = parseCsvLine(lines[i]);
+      const rawMember = row[memberColumnIndex]?.trim();
+      if (!rawMember) continue;
+
+      const kpis: KpiItem[] = [];
+      for (let col = 0; col < header.length; col += 1) {
+        if (col === memberColumnIndex) continue;
+        const label = header[col]?.trim();
+        const value = row[col]?.trim();
+        if (!label || !value) continue;
+        kpis.push({ label, value, source: "sheet" });
+      }
+      if (kpis.length > 0) {
+        map.set(normalizeMemberKey(rawMember), kpis);
+      }
+    }
+    return map;
+  } catch {
+    return new Map();
+  }
 }
 
 function parseTzOffsetMinutes(value: string | null): number {
@@ -257,6 +365,7 @@ export async function GET(request: NextRequest) {
 
   const range = buildUtcRangeFromLocalDates(startDate, endDate, tzOffsetMinutes);
   const aiEnabled = Boolean(process.env.OPENAI_API_KEY);
+  const kpiOverrides = await fetchKpiOverridesFromCsv();
 
   try {
     const profiles = await Promise.all(
@@ -322,7 +431,7 @@ export async function GET(request: NextRequest) {
           .sort((a, b) => b.seconds - a.seconds)
           .slice(0, WORK_ITEM_LIMIT);
 
-        return {
+        const baseProfile = {
           name: member.name,
           totalSeconds,
           entryCount,
@@ -335,7 +444,13 @@ export async function GET(request: NextRequest) {
           topProjectSharePct,
           days,
           workItems,
+          kpis: [],
           aiAnalysis: null,
+        } satisfies MemberProfile;
+        const overrideKpis = kpiOverrides.get(normalizeMemberKey(member.name)) ?? null;
+        return {
+          ...baseProfile,
+          kpis: overrideKpis ?? buildAutoKpis(baseProfile),
         } satisfies MemberProfile;
       })
     );

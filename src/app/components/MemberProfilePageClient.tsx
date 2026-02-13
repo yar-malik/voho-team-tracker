@@ -20,6 +20,7 @@ type MemberProfileResponse = {
     topProjectSharePct: number;
     days: Array<{ date: string; seconds: number; entryCount: number }>;
     workItems: Array<{ project: string; description: string; seconds: number; entryCount: number }>;
+    kpis: Array<{ label: string; value: string; source: "sheet" | "auto" }>;
     aiAnalysis: string | null;
   }>;
   cachedAt?: string;
@@ -191,24 +192,12 @@ export default function MemberProfilePageClient({
                 <p className="text-[11px] uppercase tracking-wide text-slate-500">7-day total</p>
                 <p className="text-sm font-semibold text-slate-900">{formatDuration(profile.totalSeconds)}</p>
               </div>
-              <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
-                <p className="text-[11px] uppercase tracking-wide text-slate-500">Active days</p>
-                <p className="text-sm font-semibold text-slate-900">{profile.activeDays}/7</p>
-              </div>
-              <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
-                <p className="text-[11px] uppercase tracking-wide text-slate-500">Avg per day</p>
-                <p className="text-sm font-semibold text-slate-900">{formatDuration(profile.averageDailySeconds)}</p>
-              </div>
-              <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
-                <p className="text-[11px] uppercase tracking-wide text-slate-500">Unique projects</p>
-                <p className="text-sm font-semibold text-slate-900">{profile.uniqueProjects}</p>
-              </div>
-              <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
-                <p className="text-[11px] uppercase tracking-wide text-slate-500">Top project share</p>
-                <p className="text-sm font-semibold text-slate-900">
-                  {profile.topProject} ({profile.topProjectSharePct}%)
-                </p>
-              </div>
+              {profile.kpis.map((kpi) => (
+                <div key={kpi.label} className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                  <p className="text-[11px] uppercase tracking-wide text-slate-500">{kpi.label}</p>
+                  <p className="text-sm font-semibold text-slate-900">{kpi.value}</p>
+                </div>
+              ))}
             </div>
 
             <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr]">
