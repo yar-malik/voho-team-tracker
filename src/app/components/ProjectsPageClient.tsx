@@ -1,22 +1,22 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 const PROJECT_COLORS = [
   "#2D9CDB",
-  "#9B51E0",
+  "#7E57C2",
   "#D53F8C",
-  "#ED8936",
-  "#C56A00",
-  "#38A169",
-  "#17A2B8",
-  "#D97706",
-  "#4C51BF",
-  "#9F7AEA",
-  "#D69E2E",
-  "#6B8E23",
-  "#E53E3E",
-  "#4A5568",
+  "#E67E22",
+  "#C97A00",
+  "#2F9E44",
+  "#1FA8A1",
+  "#C97A6B",
+  "#4C63B6",
+  "#A012BE",
+  "#C9B600",
+  "#5C7C10",
+  "#E03131",
+  "#4C4F69",
   "#0EA5E9",
 ];
 
@@ -37,15 +37,115 @@ type EditModalState = {
 
 function formatHours(totalSeconds: number) {
   const hours = totalSeconds / 3600;
-  return `${hours.toFixed(2)} h`;
+  return `${hours.toFixed(1)} h`;
+}
+
+function normalizeColor(color: string | null | undefined) {
+  return (color || "#0EA5E9").toUpperCase();
+}
+
+function ProjectModal({
+  title,
+  state,
+  busy,
+  onClose,
+  onChange,
+  onSave,
+}: {
+  title: string;
+  state: EditModalState;
+  busy: boolean;
+  onClose: () => void;
+  onChange: (next: EditModalState) => void;
+  onSave: () => Promise<void>;
+}) {
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  const selectedColor = normalizeColor(state.color);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/35 p-4" onClick={onClose}>
+      <div
+        className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-start justify-between">
+          <h2 className="text-xl font-semibold text-slate-900">{title}</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md p-1 text-2xl leading-none text-slate-500 hover:bg-slate-100"
+            aria-label="Close"
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="mt-6 space-y-4">
+          <label className="block">
+            <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">Project name</span>
+            <div className="flex items-center gap-3">
+              <span className="inline-block h-7 w-7 rounded-full" style={{ backgroundColor: state.color }} />
+              <input
+                type="text"
+                value={state.name}
+                onChange={(event) => onChange({ ...state, name: event.target.value })}
+                placeholder="Project name"
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-lg font-semibold text-slate-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+              />
+            </div>
+          </label>
+
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Project color</p>
+            <div className="inline-grid grid-cols-5 gap-2 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-8">
+              {PROJECT_COLORS.map((color) => {
+                const active = selectedColor === color.toUpperCase();
+                return (
+                  <button
+                    key={color}
+                    type="button"
+                    onClick={() => onChange({ ...state, color })}
+                    className={`relative h-8 w-8 rounded-full border-2 ${active ? "border-slate-900" : "border-transparent"}`}
+                    style={{ backgroundColor: color }}
+                    aria-label={`Select color ${color}`}
+                    title={color}
+                  >
+                    {active && <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-white">✓</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-6 flex justify-end">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void onSave()}
+            className="rounded-xl bg-fuchsia-600 px-8 py-3 text-base font-semibold text-white hover:bg-fuchsia-500 disabled:bg-slate-300"
+          >
+            {busy ? "Saving..." : "Save"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function ProjectsPageClient({ initialProjects }: { initialProjects: Project[] }) {
   const [projects, setProjects] = useState(initialProjects);
-  const [newProjectName, setNewProjectName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<EditModalState | null>(null);
+  const [creating, setCreating] = useState<EditModalState | null>(null);
 
   const sortedProjects = useMemo(
     () => [...projects].sort((a, b) => a.name.localeCompare(b.name)),
@@ -53,86 +153,72 @@ export default function ProjectsPageClient({ initialProjects }: { initialProject
   );
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-3xl font-semibold text-slate-900">Projects</h1>
-        <div className="flex items-center gap-2">
-          <input
-            type="text"
-            value={newProjectName}
-            onChange={(event) => setNewProjectName(event.target.value)}
-            placeholder="New project"
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          />
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="border-b border-slate-200 px-6 py-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-3xl font-semibold text-slate-900">Projects</h1>
           <button
             type="button"
-            disabled={busy}
-            onClick={async () => {
-              if (!newProjectName.trim()) {
-                setError("Project name is required");
-                return;
-              }
-              setBusy(true);
-              setError(null);
-              try {
-                const res = await fetch("/api/projects", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ name: newProjectName }),
-                });
-                const data = (await res.json()) as { error?: string; project?: Project };
-                if (!res.ok || data.error) throw new Error(data.error || "Failed to create project");
-                if (data.project) {
-                  setProjects((prev) => [...prev.filter((p) => p.key !== data.project!.key), data.project!]);
-                }
-                setNewProjectName("");
-              } catch (err) {
-                setError(err instanceof Error ? err.message : "Failed to create project");
-              } finally {
-                setBusy(false);
-              }
-            }}
-            className="rounded-xl bg-sky-700 px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-300"
+            onClick={() => setCreating({ key: "", name: "", color: "#0EA5E9" })}
+            className="rounded-xl bg-fuchsia-600 px-4 py-2 text-sm font-semibold text-white hover:bg-fuchsia-500"
           >
             + New project
           </button>
         </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
+          <button type="button" className="rounded-lg border border-slate-300 px-3 py-2 font-medium text-slate-800">
+            Show all, except archived
+          </button>
+          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Filters:</span>
+          <span className="rounded-md bg-slate-100 px-2.5 py-1 text-slate-700">Member</span>
+          <span className="rounded-md bg-slate-100 px-2.5 py-1 text-slate-700">Project name</span>
+        </div>
+
+        <div className="mt-4 rounded-xl bg-violet-50 px-4 py-3 text-sm text-violet-700">
+          Use colors to scan projects faster and keep the tracker visually consistent.
+        </div>
       </div>
 
-      <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-        <span className="font-semibold text-slate-900">Filters:</span> Member • Project name
-      </div>
+      {error && <p className="mx-6 mt-4 rounded bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
 
-      {error && <p className="mt-3 rounded bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
-
-      <div className="mt-4 overflow-auto rounded-xl border border-slate-200">
+      <div className="overflow-auto">
         <table className="min-w-full text-sm">
-          <thead className="bg-slate-50 text-left text-slate-600">
+          <thead className="border-y border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
             <tr>
-              <th className="px-4 py-2">Project</th>
-              <th className="px-4 py-2">Time</th>
-              <th className="px-4 py-2">Entries</th>
-              <th className="px-4 py-2">Source</th>
-              <th className="px-4 py-2 text-right">Actions</th>
+              <th className="px-6 py-3">Project</th>
+              <th className="px-6 py-3">Time status</th>
+              <th className="px-6 py-3">Entries</th>
+              <th className="px-6 py-3">Source</th>
+              <th className="px-6 py-3 text-right">Edit</th>
             </tr>
           </thead>
           <tbody>
             {sortedProjects.map((project) => (
-              <tr key={project.key} className="border-t border-slate-100">
-                <td className="px-4 py-2">
-                  <div className="inline-flex items-center gap-2 font-medium text-slate-900">
+              <tr
+                key={project.key}
+                className="cursor-pointer border-b border-slate-100 hover:bg-slate-50"
+                onClick={() => setEditing({ key: project.key, name: project.name, color: project.color || "#0EA5E9" })}
+              >
+                <td className="px-6 py-3">
+                  <div className="inline-flex items-center gap-2 text-base font-medium text-slate-900">
                     <span className="inline-block h-3.5 w-3.5 rounded-full" style={{ backgroundColor: project.color }} />
                     {project.name}
                   </div>
                 </td>
-                <td className="px-4 py-2 text-slate-600">{formatHours(project.totalSeconds || 0)}</td>
-                <td className="px-4 py-2 text-slate-600">{project.entryCount || 0}</td>
-                <td className="px-4 py-2 text-slate-600">{project.source}</td>
-                <td className="px-4 py-2 text-right">
+                <td className="px-6 py-3 text-slate-600">{formatHours(project.totalSeconds || 0)}</td>
+                <td className="px-6 py-3 text-slate-600">{project.entryCount || 0}</td>
+                <td className="px-6 py-3 text-slate-600">{project.source}</td>
+                <td className="px-6 py-3 text-right">
                   <button
                     type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setEditing({ key: project.key, name: project.name, color: project.color || "#0EA5E9" });
+                    }}
+                    aria-label={`Edit ${project.name}`}
                     onClick={() => setEditing({ key: project.key, name: project.name, color: project.color || "#0EA5E9" })}
-                    className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                    className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100"
                   >
                     Edit
                   </button>
@@ -141,7 +227,7 @@ export default function ProjectsPageClient({ initialProjects }: { initialProject
             ))}
             {sortedProjects.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-slate-500">
+                <td colSpan={5} className="px-6 py-12 text-center text-slate-500">
                   No projects yet.
                 </td>
               </tr>
@@ -151,93 +237,80 @@ export default function ProjectsPageClient({ initialProjects }: { initialProject
       </div>
 
       {editing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 p-4">
-          <div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
-            <div className="flex items-start justify-between">
-              <h2 className="text-3xl font-semibold text-slate-900">Edit Project</h2>
-              <button type="button" onClick={() => setEditing(null)} className="text-3xl leading-none text-slate-500">
-                ×
-              </button>
-            </div>
+        <ProjectModal
+          title="Edit project"
+          state={editing}
+          busy={busy}
+          onClose={() => setEditing(null)}
+          onChange={setEditing}
+          onSave={async () => {
+            if (!editing.name.trim()) {
+              setError("Project name is required");
+              return;
+            }
+            setBusy(true);
+            setError(null);
+            try {
+              const res = await fetch("/api/projects", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ key: editing.key, name: editing.name, color: editing.color }),
+              });
+              const data = (await res.json()) as {
+                error?: string;
+                project?: { key: string; name: string; color: string };
+              };
+              if (!res.ok || data.error) throw new Error(data.error || "Failed to update project");
+              if (data.project) {
+                setProjects((prev) =>
+                  prev.map((project) =>
+                    project.key === data.project!.key ? { ...project, name: data.project!.name, color: data.project!.color } : project
+                  )
+                );
+              }
+              setEditing(null);
+            } catch (err) {
+              setError(err instanceof Error ? err.message : "Failed to update project");
+            } finally {
+              setBusy(false);
+            }
+          }}
+        />
+      )}
 
-            <div className="mt-5 space-y-4">
-              <div className="flex items-center gap-3">
-                <span className="inline-block h-8 w-8 rounded-full" style={{ backgroundColor: editing.color }} />
-                <input
-                  type="text"
-                  value={editing.name}
-                  onChange={(event) => setEditing((prev) => (prev ? { ...prev, name: event.target.value } : prev))}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-3xl font-semibold"
-                />
-              </div>
-
-              <div className="rounded-xl border border-slate-200 bg-white p-3">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Project color</p>
-                <div className="grid grid-cols-5 gap-2 sm:grid-cols-8">
-                  {PROJECT_COLORS.map((color) => {
-                    const active = editing.color.toUpperCase() === color;
-                    return (
-                      <button
-                        key={color}
-                        type="button"
-                        onClick={() => setEditing((prev) => (prev ? { ...prev, color } : prev))}
-                        className={`relative h-9 w-9 rounded-full border-2 ${active ? "border-slate-900" : "border-transparent"}`}
-                        style={{ backgroundColor: color }}
-                        title={color}
-                      >
-                        {active && <span className="absolute inset-0 flex items-center justify-center text-sm font-bold text-white">✓</span>}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-6 flex justify-end">
-              <button
-                type="button"
-                disabled={busy}
-                onClick={async () => {
-                  if (!editing.name.trim()) {
-                    setError("Project name is required");
-                    return;
-                  }
-                  setBusy(true);
-                  setError(null);
-                  try {
-                    const res = await fetch("/api/projects", {
-                      method: "PATCH",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ key: editing.key, name: editing.name, color: editing.color }),
-                    });
-                    const data = (await res.json()) as {
-                      error?: string;
-                      project?: { key: string; name: string; color: string };
-                    };
-                    if (!res.ok || data.error) throw new Error(data.error || "Failed to update project");
-                    if (data.project) {
-                      setProjects((prev) =>
-                        prev.map((project) =>
-                          project.key === data.project!.key
-                            ? { ...project, name: data.project!.name, color: data.project!.color }
-                            : project
-                        )
-                      );
-                    }
-                    setEditing(null);
-                  } catch (err) {
-                    setError(err instanceof Error ? err.message : "Failed to update project");
-                  } finally {
-                    setBusy(false);
-                  }
-                }}
-                className="rounded-xl bg-sky-700 px-8 py-3 text-lg font-semibold text-white disabled:bg-slate-300"
-              >
-                {busy ? "Saving..." : "Save"}
-              </button>
-            </div>
-          </div>
-        </div>
+      {creating && (
+        <ProjectModal
+          title="Create project"
+          state={creating}
+          busy={busy}
+          onClose={() => setCreating(null)}
+          onChange={setCreating}
+          onSave={async () => {
+            if (!creating.name.trim()) {
+              setError("Project name is required");
+              return;
+            }
+            setBusy(true);
+            setError(null);
+            try {
+              const res = await fetch("/api/projects", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name: creating.name, color: creating.color }),
+              });
+              const data = (await res.json()) as { error?: string; project?: Project };
+              if (!res.ok || data.error) throw new Error(data.error || "Failed to create project");
+              if (data.project) {
+                setProjects((prev) => [...prev.filter((p) => p.key !== data.project!.key), data.project!]);
+              }
+              setCreating(null);
+            } catch (err) {
+              setError(err instanceof Error ? err.message : "Failed to create project");
+            } finally {
+              setBusy(false);
+            }
+          }}
+        />
       )}
     </section>
   );
