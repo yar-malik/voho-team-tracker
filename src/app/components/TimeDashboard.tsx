@@ -1223,17 +1223,8 @@ export default function TimeDashboard({
             </div>
           )}
 
-          {mode === "team" && (
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <p className="text-sm text-slate-600">
-                Team overview now focuses on summary data. Detailed per-member task cards are available in All calendars.
-              </p>
-            </div>
-          )}
-
           {mode === "team" && teamWeekData && (
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h2 className="text-lg font-semibold text-slate-900">Last 7 days overview</h2>
               <p className="text-sm text-slate-500">
                 Ranking by total worked time over the last seven days (from stored DB rollups).
               </p>
@@ -1297,7 +1288,6 @@ export default function TimeDashboard({
 
           {mode === "all" && (
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-lg font-semibold text-slate-900">All team calendars</h2>
             <p className="text-sm text-slate-500">
               One shared daily timeline for everyone. Matching vertical positions indicate overlap.
             </p>
