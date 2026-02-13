@@ -291,6 +291,7 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
   const [blockDrag, setBlockDrag] = useState<BlockDragState | null>(null);
   const projectPickerRef = useRef<HTMLDivElement | null>(null);
   const modalProjectPickerRef = useRef<HTMLDivElement | null>(null);
+  const latestLiveDraftRef = useRef<{ description: string; projectName: string }>({ description: "", projectName: "" });
   const hourHeight = ZOOM_LEVELS[zoomLevel];
 
   useEffect(() => {
@@ -314,6 +315,10 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
       setQuickDurationMode(false);
     }
   }, [currentTimer]);
+
+  useEffect(() => {
+    latestLiveDraftRef.current = { description, projectName };
+  }, [description, projectName]);
 
   useEffect(() => {
     if (!projectPickerOpen) return;
@@ -577,6 +582,56 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
     window.dispatchEvent(new CustomEvent("voho-timer-changed", { detail }));
   }
 
+  function patchRunningEntryLocally(nextDescription: string, nextProjectName: string) {
+    if (!currentTimer) return;
+    setEntries((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        entries: prev.entries.map((entry) => {
+          if (entry.id !== currentTimer.id) return entry;
+          const nextProject = nextProjectName.trim() || null;
+          return {
+            ...entry,
+            description: nextDescription.trim() || null,
+            project_name: nextProject,
+          };
+        }),
+      };
+    });
+  }
+
+  useEffect(() => {
+    if (!currentTimer) return;
+
+    const handle = window.setTimeout(async () => {
+      const draft = latestLiveDraftRef.current;
+      try {
+        const res = await fetch("/api/time-entries/current", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            member: memberName,
+            description: draft.description,
+            project: draft.projectName,
+          }),
+        });
+        const data = (await res.json()) as {
+          error?: string;
+          current?: { id: number; description: string | null; projectName: string | null; startAt: string; durationSeconds: number } | null;
+        };
+        if (!res.ok || data.error) return;
+        if (data.current) {
+          setCurrentTimer(data.current);
+        }
+      } catch {
+        // Best-effort live sync; keep typing smooth.
+      }
+    }, 280);
+
+    return () => window.clearTimeout(handle);
+  }, [currentTimer, description, projectName, memberName]);
+
   async function createQuickDurationEntry(rawDuration: string) {
     const minutes = parseDurationInputToMinutes(rawDuration);
     if (!minutes || minutes <= 0) {
@@ -627,7 +682,11 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
             <input
               type="text"
               value={description}
-              onChange={(event) => setDescription(event.target.value)}
+              onChange={(event) => {
+                const next = event.target.value;
+                setDescription(next);
+                patchRunningEntryLocally(next, projectName);
+              }}
               placeholder="What are you working on?"
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-xl font-semibold text-slate-900 outline-none focus:border-sky-400"
             />
@@ -688,9 +747,10 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
                           key={project.key}
                           type="button"
                           onClick={() => {
-                            setProjectName(project.name);
-                            setProjectPickerOpen(false);
-                          }}
+                              setProjectName(project.name);
+                              patchRunningEntryLocally(description, project.name);
+                              setProjectPickerOpen(false);
+                            }}
                           className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left hover:bg-slate-50"
                         >
                           <span
@@ -1181,6 +1241,66 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
                     className="rounded-lg border border-slate-300 px-3 py-2 text-xl"
                   />
                 </div>
+
+                <button
+                  type="button"
+                  disabled={entryEditor.saving}
+                  onClick={async () => {
+                    setEntryEditor((prev) => (prev ? { ...prev, saving: true, error: null } : prev));
+                    try {
+                      if (currentTimer) {
+                        const stopRes = await fetch("/api/time-entries/stop", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ member: memberName, tzOffset: new Date().getTimezoneOffset() }),
+                        });
+                        const stopData = (await stopRes.json()) as { error?: string };
+                        if (!stopRes.ok || stopData.error) throw new Error(stopData.error || "Failed to stop current timer");
+                      }
+
+                      const startRes = await fetch("/api/time-entries/start", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          member: memberName,
+                          description: entryEditor.description,
+                          project: entryEditor.project,
+                          tzOffset: new Date().getTimezoneOffset(),
+                        }),
+                      });
+                      const startData = (await startRes.json()) as {
+                        error?: string;
+                        current?: { id: number; description: string | null; projectName: string | null; startAt: string; durationSeconds: number } | null;
+                      };
+                      if (!startRes.ok || startData.error) throw new Error(startData.error || "Failed to start timer");
+
+                      if (startData.current) {
+                        setCurrentTimer(startData.current);
+                        emitTimerChanged({
+                          memberName,
+                          isRunning: true,
+                          startAt: startData.current.startAt,
+                          durationSeconds: startData.current.durationSeconds,
+                        });
+                      }
+
+                      setDescription(entryEditor.description);
+                      setProjectName(entryEditor.project);
+                      setEntryEditor(null);
+                      setRefreshTick((v) => v + 1);
+                    } catch (err) {
+                      setEntryEditor((prev) => ({
+                        ...(prev as EntryEditorState),
+                        saving: false,
+                        error: err instanceof Error ? err.message : "Failed to start timer from entry",
+                      }));
+                    }
+                  }}
+                  className="rounded-lg border border-sky-300 bg-sky-50 px-4 py-2.5 text-xl font-semibold text-sky-700 disabled:bg-slate-200 disabled:text-slate-500"
+                  title="Start new timer now with this description and project"
+                >
+                  ▶
+                </button>
 
                 <button
                   type="button"
