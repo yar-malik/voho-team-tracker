@@ -50,6 +50,8 @@ type EntryEditorState = {
 };
 
 const CALENDAR_HOUR_HEIGHT = 56;
+const MIN_ENTRY_MINUTES = 15;
+const DRAG_SNAP_MINUTES = 5;
 
 function formatTimer(totalSeconds: number): string {
   const safe = Math.max(0, Math.floor(totalSeconds));
@@ -172,7 +174,7 @@ function buildCalendarBlock(entry: TimeEntry, dayStartMs: number) {
   const stopMs = entry.stop ? new Date(entry.stop).getTime() : startMs + Math.max(0, entry.duration) * 1000;
   const safeStopMs = Number.isNaN(stopMs) ? startMs + Math.max(0, entry.duration) * 1000 : stopMs;
   const minutesFromStart = (startMs - dayStartMs) / (60 * 1000);
-  const durationMinutes = Math.max(15, (safeStopMs - startMs) / (60 * 1000));
+  const durationMinutes = Math.max(MIN_ENTRY_MINUTES, (safeStopMs - startMs) / (60 * 1000));
   return {
     id: `${entry.id}-${startMs}`,
     entryId: entry.id,
@@ -187,10 +189,24 @@ function buildCalendarBlock(entry: TimeEntry, dayStartMs: number) {
     durationSeconds: Math.max(0, entry.duration),
     startMinute: minutesFromStart,
     endMinute: minutesFromStart + durationMinutes,
+    descriptionRaw: entry.description ?? "",
+    projectRaw: entry.project_name ?? "",
+    isRunning: entry.stop === null,
   };
 }
 
 type CalendarBlock = NonNullable<ReturnType<typeof buildCalendarBlock>>;
+type DragMode = "move" | "resize-start" | "resize-end";
+type BlockDragState = {
+  mode: DragMode;
+  block: CalendarBlock & { column: number; laneCount: number; groupId: number };
+  startClientY: number;
+  initialTop: number;
+  initialHeight: number;
+  previewTop: number;
+  previewHeight: number;
+  hasMoved: boolean;
+};
 
 function layoutCalendarBlocks(blocks: CalendarBlock[]) {
   const sorted = [...blocks].sort((a, b) => a.startMinute - b.startMinute || a.endMinute - b.endMinute);
@@ -224,6 +240,22 @@ function layoutCalendarBlocks(blocks: CalendarBlock[]) {
   }
 
   return laidOut;
+}
+
+function snapMinutes(value: number) {
+  return Math.round(value / DRAG_SNAP_MINUTES) * DRAG_SNAP_MINUTES;
+}
+
+function minuteToIso(dateInput: string, minuteOfDay: number) {
+  const clamped = Math.max(0, Math.min(24 * 60, minuteOfDay));
+  if (clamped === 24 * 60) {
+    const next = new Date(`${dateInput}T00:00:00`);
+    next.setDate(next.getDate() + 1);
+    return next.toISOString();
+  }
+  const hour = Math.floor(clamped / 60);
+  const minute = Math.floor(clamped % 60);
+  return buildLocalDateTimeIso(dateInput, hour, minute);
 }
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
@@ -287,6 +319,7 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
   const [calendarDraft, setCalendarDraft] = useState<CalendarDraft | null>(null);
   const [draftDurationMinutes, setDraftDurationMinutes] = useState("60");
   const [entryEditor, setEntryEditor] = useState<EntryEditorState | null>(null);
+  const [blockDrag, setBlockDrag] = useState<BlockDragState | null>(null);
 
   useEffect(() => {
     if (!entryEditor) return;
@@ -309,6 +342,106 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
       setQuickDurationMode(false);
     }
   }, [currentTimer]);
+
+  useEffect(() => {
+    if (!blockDrag) return;
+
+    const handleMove = (event: MouseEvent) => {
+      const deltaPx = event.clientY - blockDrag.startClientY;
+      const deltaMinutes = snapMinutes((deltaPx / CALENDAR_HOUR_HEIGHT) * 60);
+
+      if (Math.abs(deltaPx) >= 3 && !blockDrag.hasMoved) {
+        setBlockDrag((prev) => (prev ? { ...prev, hasMoved: true } : prev));
+      }
+
+      setBlockDrag((prev) => {
+        if (!prev) return prev;
+
+        if (prev.mode === "move") {
+          const durationPx = prev.initialHeight;
+          const rawTop = prev.initialTop + (deltaMinutes / 60) * CALENDAR_HOUR_HEIGHT;
+          const maxTop = 24 * CALENDAR_HOUR_HEIGHT - durationPx;
+          const nextTop = Math.max(0, Math.min(maxTop, rawTop));
+          return { ...prev, previewTop: nextTop, previewHeight: durationPx };
+        }
+
+        if (prev.mode === "resize-start") {
+          const endPx = prev.initialTop + prev.initialHeight;
+          const rawTop = prev.initialTop + (deltaMinutes / 60) * CALENDAR_HOUR_HEIGHT;
+          const maxTop = endPx - (MIN_ENTRY_MINUTES / 60) * CALENDAR_HOUR_HEIGHT;
+          const nextTop = Math.max(0, Math.min(maxTop, rawTop));
+          const nextHeight = Math.max((MIN_ENTRY_MINUTES / 60) * CALENDAR_HOUR_HEIGHT, endPx - nextTop);
+          return { ...prev, previewTop: nextTop, previewHeight: nextHeight };
+        }
+
+        const rawHeight = prev.initialHeight + (deltaMinutes / 60) * CALENDAR_HOUR_HEIGHT;
+        const maxHeight = 24 * CALENDAR_HOUR_HEIGHT - prev.initialTop;
+        const nextHeight = Math.max((MIN_ENTRY_MINUTES / 60) * CALENDAR_HOUR_HEIGHT, Math.min(maxHeight, rawHeight));
+        return { ...prev, previewTop: prev.initialTop, previewHeight: nextHeight };
+      });
+    };
+
+    const handleUp = async () => {
+      const finalDrag = blockDrag;
+      setBlockDrag(null);
+      if (!finalDrag) return;
+
+      if (!finalDrag.hasMoved) {
+        setEntryEditor({
+          entryId: finalDrag.block.entryId,
+          description: finalDrag.block.description === "(No description)" ? "" : finalDrag.block.description,
+          project: finalDrag.block.project === "No project" ? "" : finalDrag.block.project,
+          startTime: formatTimeInputLocal(finalDrag.block.startIso),
+          stopTime: formatTimeInputLocal(finalDrag.block.stopIso),
+          saving: false,
+          error: null,
+        });
+        return;
+      }
+
+      const nextStartMinute = Math.round((finalDrag.previewTop / CALENDAR_HOUR_HEIGHT) * 60);
+      const nextDurationMinutes = Math.max(
+        MIN_ENTRY_MINUTES,
+        Math.round((finalDrag.previewHeight / CALENDAR_HOUR_HEIGHT) * 60)
+      );
+      const nextEndMinute = Math.min(24 * 60, nextStartMinute + nextDurationMinutes);
+
+      const startAt = minuteToIso(date, nextStartMinute);
+      const stopAt = minuteToIso(date, nextEndMinute);
+
+      setBusy(true);
+      setError(null);
+      try {
+        const res = await fetch("/api/time-entries/update", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            member: memberName,
+            entryId: finalDrag.block.entryId,
+            description: finalDrag.block.descriptionRaw,
+            project: finalDrag.block.projectRaw,
+            startAt,
+            stopAt,
+            tzOffset: new Date().getTimezoneOffset(),
+          }),
+        });
+        const data = (await res.json()) as { error?: string };
+        if (!res.ok || data.error) throw new Error(data.error || "Failed to update entry");
+        setRefreshTick((v) => v + 1);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to update entry");
+      } finally {
+        setBusy(false);
+      }
+    };
+
+    window.addEventListener("mousemove", handleMove);
+    window.addEventListener("mouseup", handleUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMove);
+      window.removeEventListener("mouseup", handleUp);
+    };
+  }, [blockDrag, date, memberName]);
 
   useEffect(() => {
     let active = true;
@@ -732,35 +865,107 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
                 </button>
               ))}
 
-              {calendarBlocks.map((block) => (
-                <button
-                  key={block.id}
-                  type="button"
-                  onClick={() =>
-                    setEntryEditor({
-                      entryId: block.entryId,
-                      description: block.description === "(No description)" ? "" : block.description,
-                      project: block.project === "No project" ? "" : block.project,
-                      startTime: formatTimeInputLocal(block.startIso),
-                      stopTime: formatTimeInputLocal(block.stopIso),
-                      saving: false,
-                      error: null,
-                    })
-                  }
-                  className="absolute overflow-hidden rounded-lg border px-2 py-1 text-left text-xs shadow-sm"
-                  style={{
-                    top: `${block.top}px`,
-                    height: `${Math.max(22, block.height)}px`,
-                    left: `calc(6rem + ${block.column} * ((100% - 8rem) / ${block.laneCount}))`,
-                    width: `calc(((100% - 8rem) / ${block.laneCount}) - 4px)`,
-                    ...getPastelProjectStyle(block.project, block.projectColor),
-                  }}
-                >
-                  <p className="truncate font-semibold text-slate-900">{block.description}</p>
-                  <p className="truncate text-slate-700">{block.project}</p>
-                  <p className="text-[11px] text-slate-600">{block.timeRange}</p>
-                </button>
-              ))}
+              {calendarBlocks.map((block) => {
+                const isDraggingThis = blockDrag?.block.entryId === block.entryId;
+                const top = isDraggingThis ? blockDrag.previewTop : block.top;
+                const height = isDraggingThis ? blockDrag.previewHeight : Math.max(22, block.height);
+
+                return (
+                  <div
+                    key={block.id}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter" && event.key !== " ") return;
+                      event.preventDefault();
+                      setEntryEditor({
+                        entryId: block.entryId,
+                        description: block.description === "(No description)" ? "" : block.description,
+                        project: block.project === "No project" ? "" : block.project,
+                        startTime: formatTimeInputLocal(block.startIso),
+                        stopTime: formatTimeInputLocal(block.stopIso),
+                        saving: false,
+                        error: null,
+                      });
+                    }}
+                    onMouseDown={(event) => {
+                      if (busy || block.isRunning) return;
+                      if (event.button !== 0) return;
+                      event.preventDefault();
+                      setBlockDrag({
+                        mode: "move",
+                        block,
+                        startClientY: event.clientY,
+                        initialTop: block.top,
+                        initialHeight: Math.max(22, block.height),
+                        previewTop: block.top,
+                        previewHeight: Math.max(22, block.height),
+                        hasMoved: false,
+                      });
+                    }}
+                    className={`absolute overflow-hidden rounded-lg border px-2 py-1 text-left text-xs shadow-sm ${
+                      block.isRunning ? "cursor-default" : "cursor-move"
+                    } ${isDraggingThis ? "ring-2 ring-sky-300" : ""}`}
+                    style={{
+                      top: `${top}px`,
+                      height: `${height}px`,
+                      left: `calc(6rem + ${block.column} * ((100% - 8rem) / ${block.laneCount}))`,
+                      width: `calc(((100% - 8rem) / ${block.laneCount}) - 4px)`,
+                      ...getPastelProjectStyle(block.project, block.projectColor),
+                    }}
+                  >
+                    {!block.isRunning && (
+                      <button
+                        type="button"
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          if (busy) return;
+                          setBlockDrag({
+                            mode: "resize-start",
+                            block,
+                            startClientY: event.clientY,
+                            initialTop: block.top,
+                            initialHeight: Math.max(22, block.height),
+                            previewTop: block.top,
+                            previewHeight: Math.max(22, block.height),
+                            hasMoved: false,
+                          });
+                        }}
+                        className="absolute left-0 right-0 top-0 h-2 cursor-ns-resize bg-transparent"
+                        aria-label="Resize start time"
+                      />
+                    )}
+
+                    <p className="truncate font-semibold text-slate-900">{block.description}</p>
+                    <p className="truncate text-slate-700">{block.project}</p>
+                    <p className="text-[11px] text-slate-600">{block.timeRange}</p>
+
+                    {!block.isRunning && (
+                      <button
+                        type="button"
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          if (busy) return;
+                          setBlockDrag({
+                            mode: "resize-end",
+                            block,
+                            startClientY: event.clientY,
+                            initialTop: block.top,
+                            initialHeight: Math.max(22, block.height),
+                            previewTop: block.top,
+                            previewHeight: Math.max(22, block.height),
+                            hasMoved: false,
+                          });
+                        }}
+                        className="absolute bottom-0 left-0 right-0 h-2 cursor-ns-resize bg-transparent"
+                        aria-label="Resize end time"
+                      />
+                    )}
+                  </div>
+                );
+              })}
 
               {nowMarkerTop !== null && (
                 <div className="pointer-events-none absolute left-24 right-0 border-t-2 border-sky-500" style={{ top: `${nowMarkerTop}px` }} />

@@ -116,16 +116,42 @@ function buildIdleFaviconDataUrl() {
   const context = canvas.getContext("2d");
   if (!context) return null;
 
-  context.fillStyle = "#E2E8F0";
+  context.fillStyle = "#F1F5F9";
   context.fillRect(0, 0, 64, 64);
-  context.fillStyle = "#94A3B8";
+
+  // Outer gray ring for clear "idle" state.
+  context.strokeStyle = "#94A3B8";
+  context.lineWidth = 5;
   context.beginPath();
-  context.arc(32, 32, 14, 0, Math.PI * 2);
-  context.fill();
-  context.fillStyle = "#F8FAFC";
+  context.arc(32, 32, 19, 0, Math.PI * 2);
+  context.stroke();
+
+  // Inner clock body.
+  context.fillStyle = "#CBD5E1";
   context.beginPath();
-  context.arc(32, 32, 4.5, 0, Math.PI * 2);
+  context.arc(32, 32, 13, 0, Math.PI * 2);
   context.fill();
+
+  // Center.
+  context.fillStyle = "#E2E8F0";
+  context.beginPath();
+  context.arc(32, 32, 3.5, 0, Math.PI * 2);
+  context.fill();
+
+  // Clock hand.
+  context.strokeStyle = "#64748B";
+  context.lineWidth = 3;
+  context.lineCap = "round";
+  context.beginPath();
+  context.moveTo(32, 32);
+  context.lineTo(32, 25);
+  context.stroke();
+
+  context.beginPath();
+  context.moveTo(32, 32);
+  context.lineTo(37, 34.5);
+  context.stroke();
+
   return canvas.toDataURL("image/png");
 }
 
