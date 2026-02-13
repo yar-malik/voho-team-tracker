@@ -78,12 +78,13 @@ export default function MemberProfilePageClient({
       member: memberName,
       date,
       tzOffset: String(new Date().getTimezoneOffset()),
+      _req: String(Date.now()),
     });
     if (forceRefreshRef.current) {
       params.set("refresh", "1");
     }
 
-    fetch(`/api/member-profiles?${params.toString()}`)
+    fetch(`/api/member-profiles?${params.toString()}`, { cache: "no-store" })
       .then(async (res) => {
         const data = (await res.json()) as MemberProfileResponse;
         if (!res.ok || data.error) {

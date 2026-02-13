@@ -459,6 +459,7 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
     if (!member && mode === "member") return;
 
     let active = true;
+    const requestNonce = String(Date.now());
     const shouldForceRefresh = forceRefreshRef.current;
     const refreshSource = shouldForceRefresh ? refreshSourceRef.current : "cached";
     setLoading(true);
@@ -468,6 +469,7 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
     setQuotaResetsIn(null);
 
     const params = new URLSearchParams({ date, tzOffset: String(new Date().getTimezoneOffset()) });
+    params.set("_req", requestNonce);
     if (shouldForceRefresh) {
       params.set("refresh", "1");
     }
@@ -478,10 +480,11 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
             member,
             date,
             tzOffset: String(new Date().getTimezoneOffset()),
+            _req: requestNonce,
             ...(shouldForceRefresh ? { refresh: "1" } : {}),
           }).toString()}`;
 
-    fetch(url)
+    fetch(url, { cache: "no-store" })
       .then(async (res) => {
         const payload = (await res.json()) as EntriesResponse | TeamResponse;
         if (!res.ok || payload.error) {
@@ -539,14 +542,16 @@ export default function TimeDashboard({ members }: { members: Member[] }) {
   useEffect(() => {
     if (!(mode === "team" || mode === "all")) return;
     let active = true;
+    const requestNonce = String(Date.now());
     const shouldForceRefresh = forceRefreshRef.current;
 
     const params = new URLSearchParams({ date, tzOffset: String(new Date().getTimezoneOffset()) });
+    params.set("_req", requestNonce);
     if (shouldForceRefresh) {
       params.set("refresh", "1");
     }
 
-    fetch(`/api/team-week?${params.toString()}`)
+    fetch(`/api/team-week?${params.toString()}`, { cache: "no-store" })
       .then(async (res) => {
         const payload = (await res.json()) as TeamWeekResponse;
         if (!res.ok || payload.error) {
