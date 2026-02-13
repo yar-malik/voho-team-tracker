@@ -796,7 +796,7 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
               <button
                 type="button"
                 onClick={() => setQuickDurationMode(true)}
-                className="min-w-[95px] text-right text-3xl font-semibold tabular-nums text-slate-900 transition hover:text-blue-700"
+                className="min-w-[95px] text-right text-3xl font-semibold tabular-nums text-slate-900 transition hover:text-[#0BA5E9]"
                 title="Click to type duration like 15m or 1h 20m"
               >
                 {formatTimer(runningSeconds)}
@@ -841,7 +841,7 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
                   setBusy(false);
                 }
               }}
-              className="h-12 w-12 rounded-full bg-blue-700 text-lg font-bold text-white shadow-sm transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+              className="h-12 w-12 rounded-full bg-[#0BA5E9] text-lg font-bold text-white shadow-sm transition hover:bg-[#0994cf] disabled:cursor-not-allowed disabled:bg-slate-300"
               title="Start timer"
             >
               ▶
@@ -869,7 +869,7 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
                   setBusy(false);
                 }
               }}
-              className="h-12 w-12 rounded-full bg-sky-700 text-lg font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+              className="h-12 w-12 rounded-full bg-[#0BA5E9] text-lg font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
               title="Stop timer"
             >
               ■
@@ -1358,7 +1358,7 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
                       }));
                     }
                   }}
-                  className="ml-auto rounded-lg bg-sky-600 px-6 py-2.5 text-xl font-semibold text-white disabled:bg-slate-300"
+                  className="ml-auto rounded-lg bg-[#0BA5E9] px-6 py-2.5 text-xl font-semibold text-white hover:bg-[#0994cf] disabled:bg-slate-300"
                 >
                   {entryEditor.saving ? "Saving..." : "Save"}
                 </button>

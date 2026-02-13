@@ -237,7 +237,7 @@ export default function GlobalTimerBar({ memberName }: { memberName: string | nu
               setBusy(false);
             }
           }}
-          className="h-12 w-12 rounded-full bg-blue-700 text-lg font-bold text-white shadow-sm transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+          className="h-12 w-12 rounded-full bg-[#0BA5E9] text-lg font-bold text-white shadow-sm transition hover:bg-[#0994cf] disabled:cursor-not-allowed disabled:bg-slate-300"
           title="Start timer"
         >
           ▶
@@ -267,7 +267,7 @@ export default function GlobalTimerBar({ memberName }: { memberName: string | nu
               setBusy(false);
             }
           }}
-          className="h-12 w-12 rounded-full bg-sky-700 text-lg font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+          className="h-12 w-12 rounded-full bg-[#0BA5E9] text-lg font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
           title="Stop timer"
         >
           ■

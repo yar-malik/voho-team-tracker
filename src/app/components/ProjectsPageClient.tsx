@@ -112,7 +112,7 @@ function ProjectModal({
             type="button"
             disabled={busy}
             onClick={() => void onSave()}
-            className="rounded-xl bg-fuchsia-600 px-8 py-3 text-base font-semibold text-white hover:bg-fuchsia-500 disabled:bg-slate-300"
+            className="rounded-xl bg-[#0BA5E9] px-8 py-3 text-base font-semibold text-white hover:bg-[#0994cf] disabled:bg-slate-300"
           >
             {busy ? "Saving..." : "Save"}
           </button>
@@ -142,7 +142,7 @@ export default function ProjectsPageClient({ initialProjects }: { initialProject
           <button
             type="button"
             onClick={() => setCreating({ key: "", name: "", color: DEFAULT_PROJECT_COLOR })}
-            className="rounded-xl bg-fuchsia-600 px-4 py-2 text-sm font-semibold text-white hover:bg-fuchsia-500"
+            className="rounded-xl bg-[#0BA5E9] px-4 py-2 text-sm font-semibold text-white hover:bg-[#0994cf]"
           >
             + New project
           </button>
@@ -157,7 +157,7 @@ export default function ProjectsPageClient({ initialProjects }: { initialProject
           <span className="rounded-md bg-slate-100 px-2.5 py-1 text-slate-700">Project name</span>
         </div>
 
-        <div className="mt-4 rounded-xl bg-violet-50 px-4 py-3 text-sm text-violet-700">
+        <div className="mt-4 rounded-xl bg-sky-50 px-4 py-3 text-sm text-sky-700">
           Use colors to scan projects faster and keep the tracker visually consistent.
         </div>
       </div>
