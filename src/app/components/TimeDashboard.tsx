@@ -1073,7 +1073,7 @@ export default function TimeDashboard({
               <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {teamData.members.map((memberData) => {
                   const cardEntries = memberData.entries.filter((entry) => !isExcludedFromRanking(entry.project_name));
-                  const running = cardEntries.find((entry) => entry.duration < 0) ?? null;
+                  const running = memberData.current ?? cardEntries.find((entry) => entry.stop === null) ?? null;
                   const memberSummary = buildTaskProjectSummary(cardEntries).slice(0, 4);
                   const lastActivityMs = cardEntries.reduce((latest, entry) => {
                     const endMs = getEntryEndMs(entry);
