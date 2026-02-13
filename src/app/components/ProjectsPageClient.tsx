@@ -3,21 +3,21 @@
 import { useEffect, useMemo, useState } from "react";
 
 const PROJECT_COLORS = [
-  "#2D9CDB",
-  "#7E57C2",
-  "#D53F8C",
-  "#E67E22",
-  "#C97A00",
-  "#2F9E44",
-  "#1FA8A1",
-  "#C97A6B",
-  "#4C63B6",
-  "#A012BE",
-  "#C9B600",
-  "#5C7C10",
-  "#E03131",
-  "#4C4F69",
-  "#0EA5E9",
+  "#A5D8FF",
+  "#91A7FF",
+  "#B197FC",
+  "#D0BFFF",
+  "#FCC2D7",
+  "#FFD8A8",
+  "#FFE8A3",
+  "#C3FAE8",
+  "#99E9F2",
+  "#B2F2BB",
+  "#FFD6E0",
+  "#DEE2E6",
+  "#BAC8FF",
+  "#C5F6FA",
+  "#E5DBFF",
 ];
 
 type Project = {

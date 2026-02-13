@@ -97,13 +97,35 @@ function buildTimerFaviconDataUrl(label: string) {
   const context = canvas.getContext("2d");
   if (!context) return null;
 
-  context.fillStyle = "#111827";
+  context.fillStyle = "#0EA5E9";
   context.fillRect(0, 0, 64, 64);
+  context.fillStyle = "#0369A1";
+  context.fillRect(0, 48, 64, 16);
   context.fillStyle = "#ffffff";
   context.font = "bold 10px sans-serif";
   context.textAlign = "center";
   context.textBaseline = "middle";
-  context.fillText(label, 32, 34);
+  context.fillText(label, 32, 30);
+  return canvas.toDataURL("image/png");
+}
+
+function buildIdleFaviconDataUrl() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 64;
+  canvas.height = 64;
+  const context = canvas.getContext("2d");
+  if (!context) return null;
+
+  context.fillStyle = "#E2E8F0";
+  context.fillRect(0, 0, 64, 64);
+  context.fillStyle = "#94A3B8";
+  context.beginPath();
+  context.arc(32, 32, 14, 0, Math.PI * 2);
+  context.fill();
+  context.fillStyle = "#F8FAFC";
+  context.beginPath();
+  context.arc(32, 32, 4.5, 0, Math.PI * 2);
+  context.fill();
   return canvas.toDataURL("image/png");
 }
 
@@ -213,7 +235,12 @@ export default function PlatformShell({
   useEffect(() => {
     if (!isRunning) {
       document.title = defaultTitleRef.current;
-      setFaviconHref(defaultFaviconHrefRef.current);
+      const idleFaviconDataUrl = buildIdleFaviconDataUrl();
+      if (idleFaviconDataUrl) {
+        setFaviconHref(idleFaviconDataUrl);
+      } else {
+        setFaviconHref(defaultFaviconHrefRef.current);
+      }
       return;
     }
     document.title = `${runningLabel} • ${defaultTitleRef.current}`;

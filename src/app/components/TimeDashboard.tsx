@@ -320,8 +320,8 @@ function getProjectBlockStyle(project: string, projectColor: string | null | und
   const rgb = projectColor ? hexToRgb(projectColor) : null;
   if (rgb) {
     return {
-      borderColor: `rgb(${rgb.r} ${rgb.g} ${rgb.b} / 0.9)`,
-      backgroundColor: `rgb(${rgb.r} ${rgb.g} ${rgb.b} / 0.24)`,
+      borderColor: `rgb(${rgb.r} ${rgb.g} ${rgb.b} / 0.72)`,
+      backgroundColor: `rgb(${rgb.r} ${rgb.g} ${rgb.b} / 0.20)`,
     };
   }
 
@@ -333,13 +333,13 @@ function getProjectBlockStyle(project: string, projectColor: string | null | und
   }
 
   const fallback = [
-    { border: "rgb(244 63 94 / 0.8)", bg: "rgb(254 205 211 / 0.7)" },
-    { border: "rgb(245 158 11 / 0.8)", bg: "rgb(254 243 199 / 0.75)" },
-    { border: "rgb(16 185 129 / 0.8)", bg: "rgb(209 250 229 / 0.75)" },
-    { border: "rgb(6 182 212 / 0.8)", bg: "rgb(207 250 254 / 0.75)" },
-    { border: "rgb(14 165 233 / 0.8)", bg: "rgb(224 242 254 / 0.75)" },
-    { border: "rgb(99 102 241 / 0.8)", bg: "rgb(224 231 255 / 0.75)" },
-    { border: "rgb(132 204 22 / 0.8)", bg: "rgb(236 252 203 / 0.75)" },
+    { border: "rgb(147 197 253 / 0.72)", bg: "rgb(224 242 254 / 0.90)" },
+    { border: "rgb(167 139 250 / 0.72)", bg: "rgb(237 233 254 / 0.90)" },
+    { border: "rgb(249 168 212 / 0.72)", bg: "rgb(252 231 243 / 0.92)" },
+    { border: "rgb(251 191 36 / 0.72)", bg: "rgb(254 243 199 / 0.92)" },
+    { border: "rgb(94 234 212 / 0.72)", bg: "rgb(204 251 241 / 0.92)" },
+    { border: "rgb(134 239 172 / 0.72)", bg: "rgb(220 252 231 / 0.92)" },
+    { border: "rgb(186 230 253 / 0.72)", bg: "rgb(224 242 254 / 0.92)" },
   ];
 
   let hash = 0;
