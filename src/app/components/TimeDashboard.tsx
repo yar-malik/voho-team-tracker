@@ -957,6 +957,34 @@ export default function TimeDashboard({
             onChange={(event) => setDate(event.target.value)}
           />
         </div>
+        {(mode === "all" || mode === "team") && (
+          <div className="md:col-span-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Daily ranking</span>
+              <span className="text-xs text-slate-500">{date}</span>
+            </div>
+            {teamRanking.length === 0 ? (
+              <p className="mt-3 text-sm text-slate-500">No ranking data yet.</p>
+            ) : (
+              <div className="mt-3 flex h-32 items-end gap-2">
+                {teamRanking.slice(0, 8).map((row) => {
+                  const maxSeconds = teamRanking[0]?.rankedSeconds ?? 0;
+                  const barHeight = maxSeconds > 0 ? Math.max(14, Math.round((row.rankedSeconds / maxSeconds) * 100)) : 14;
+                  return (
+                    <div key={row.name} className="flex min-w-[64px] flex-1 flex-col items-center gap-1">
+                      <div
+                        className="w-full rounded-t-md bg-gradient-to-t from-[#0BA5E9] to-[#67D0F8]"
+                        style={{ height: `${barHeight}%` }}
+                        title={`${row.name}: ${formatDuration(row.rankedSeconds)}`}
+                      />
+                      <p className="w-full truncate text-center text-[11px] font-semibold text-slate-700">{row.name}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
         {mode === "member" && (
           <div className="flex flex-col justify-between rounded-xl border border-slate-200 bg-white px-4 py-3">
             <span className="text-xs uppercase tracking-wide text-slate-500">Total logged</span>
