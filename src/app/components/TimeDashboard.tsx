@@ -83,6 +83,7 @@ const LAST_KEY = "toggl-team-last";
 const HOURS_IN_DAY = 24;
 const HOUR_HEIGHT = 72;
 const MIN_BLOCK_HEIGHT = 24;
+const DRAG_SNAP_MINUTES = 5;
 const RANKING_ENTRY_CAP_SECONDS = 4 * 60 * 60;
 const EXCLUDED_PROJECT_NAME = "non-work-task";
 const MEMBER_LINK_CLASS =
@@ -199,6 +200,38 @@ type HoverTooltipState = {
   left: number;
   top: number;
 };
+
+type DragMode = "move" | "resize-start" | "resize-end";
+
+type BlockDragState = {
+  mode: DragMode;
+  memberName: string;
+  entry: TimeEntry;
+  startClientY: number;
+  initialTopPx: number;
+  initialHeightPx: number;
+  previewTopPx: number;
+  previewHeightPx: number;
+  hasMoved: boolean;
+};
+
+function snapMinutes(value: number) {
+  return Math.round(value / DRAG_SNAP_MINUTES) * DRAG_SNAP_MINUTES;
+}
+
+function minuteToIso(dateInput: string, minuteOfDay: number) {
+  const clamped = Math.max(0, Math.min(24 * 60, minuteOfDay));
+  if (clamped === 24 * 60) {
+    const next = new Date(`${dateInput}T00:00:00`);
+    next.setDate(next.getDate() + 1);
+    return next.toISOString();
+  }
+  const hour = Math.floor(clamped / 60);
+  const minute = Math.floor(clamped % 60);
+  return new Date(
+    `${dateInput}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00`
+  ).toISOString();
+}
 
 function buildTimelineBlocks(entries: TimeEntry[], dateInput: string) {
   const { start, end } = getDayBoundsMs(dateInput);
