@@ -1380,7 +1380,7 @@ export default function TimeDashboard({
                 >
                   {teamTimeline.map((memberTimeline) => (
                     <div key={memberTimeline.name} className="space-y-2">
-                      <p className="text-sm font-semibold text-slate-700">
+                      <p className="sticky top-0 z-30 rounded-md bg-white/95 px-1 py-1 text-sm font-semibold text-slate-700 shadow-sm backdrop-blur">
                         <Link href={getMemberPageHref(memberTimeline.name, date)} className={MEMBER_LINK_CLASS}>
                           {memberTimeline.name}
                         </Link>
