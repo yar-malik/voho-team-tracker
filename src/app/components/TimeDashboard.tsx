@@ -85,8 +85,6 @@ const HOUR_HEIGHT = 72;
 const MIN_BLOCK_HEIGHT = 24;
 const RANKING_ENTRY_CAP_SECONDS = 4 * 60 * 60;
 const EXCLUDED_PROJECT_NAME = "non-work-task";
-const AUTO_REFRESH_INTERVAL_MS = 15 * 60 * 1000;
-const LIVE_REFRESH_INTERVAL_MS = 20 * 1000;
 const MEMBER_LINK_CLASS =
   "font-semibold text-sky-700 underline decoration-sky-400 decoration-2 underline-offset-2 hover:text-sky-800";
 
@@ -638,23 +636,6 @@ export default function TimeDashboard({
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
-      if (document.visibilityState === "hidden") return;
-      setRefreshTick((value) => value + 1);
-    }, AUTO_REFRESH_INTERVAL_MS);
-
-    return () => window.clearInterval(intervalId);
-  }, []);
-
-  useEffect(() => {
-    const intervalId = window.setInterval(() => {
-      if (document.visibilityState === "hidden") return;
-      setRefreshTick((value) => value + 1);
-    }, LIVE_REFRESH_INTERVAL_MS);
-    return () => window.clearInterval(intervalId);
-  }, [mode, member, date]);
-
-  useEffect(() => {
-    const intervalId = window.setInterval(() => {
       setRelativeNowMs(Date.now());
     }, 30 * 1000);
     return () => window.clearInterval(intervalId);
@@ -743,9 +724,8 @@ export default function TimeDashboard({
 
   const teamRanking = useMemo(() => {
     if (!teamData) return [] as TeamRankingRow[];
-    const allowed = new Set(selectedMembers);
-    return buildTeamRanking(teamData.members.filter((item) => allowed.has(item.name)));
-  }, [teamData, selectedMembers]);
+    return buildTeamRanking(teamData.members);
+  }, [teamData]);
 
   const teamTimeline = useMemo(() => {
     if (!teamData) return [] as Array<{ name: string; blocks: TimelineBlock[]; maxLanes: number }>;
@@ -764,18 +744,6 @@ export default function TimeDashboard({
       ...buildTimelineBlocks(memberData.entries, date),
     }));
   }, [teamData, date, selectedMembers]);
-
-  const filteredTeamMembers = useMemo(() => {
-    if (!teamData) return [] as TeamMemberData[];
-    const allowed = new Set(selectedMembers);
-    return teamData.members.filter((item) => allowed.has(item.name));
-  }, [teamData, selectedMembers]);
-
-  const filteredTeamWeekRows = useMemo(() => {
-    if (!teamWeekData) return [] as TeamWeekResponse["members"];
-    const allowed = new Set(selectedMembers);
-    return teamWeekData.members.filter((item) => allowed.has(item.name));
-  }, [teamWeekData, selectedMembers]);
 
   const memberWeekSeries = useMemo(() => {
     if (!teamWeekData || !member) return [] as Array<{ date: string; seconds: number }>;
@@ -989,57 +957,6 @@ export default function TimeDashboard({
             onChange={(event) => setDate(event.target.value)}
           />
         </div>
-        {(mode === "all" || mode === "team") && (
-          <div className="md:col-span-2">
-            <label className="text-sm font-medium text-slate-600">Visible calendars</label>
-            <div className="mt-2 relative" ref={memberPickerRef}>
-              <button
-                type="button"
-                onClick={() => setMemberPickerOpen((open) => !open)}
-                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-left text-sm text-slate-900"
-              >
-                {selectedMembers.length} selected
-              </button>
-              {memberPickerOpen && (
-                <div className="absolute z-40 mt-2 max-h-64 w-full overflow-auto rounded-xl border border-slate-200 bg-white p-2 shadow-xl">
-                  <div className="mb-2 flex items-center justify-between gap-2 px-1">
-                    <button
-                      type="button"
-                      className="text-xs font-semibold text-sky-700"
-                      onClick={() => setSelectedMembers(members.map((item) => item.name))}
-                    >
-                      Select all
-                    </button>
-                    <button
-                      type="button"
-                      className="text-xs font-semibold text-sky-700"
-                      onClick={() => setSelectedMembers([])}
-                    >
-                      Clear
-                    </button>
-                  </div>
-                  {members.map((item) => {
-                    const checked = selectedMembers.includes(item.name);
-                    return (
-                      <label key={item.name} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50">
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() =>
-                            setSelectedMembers((prev) =>
-                              prev.includes(item.name) ? prev.filter((name) => name !== item.name) : [...prev, item.name]
-                            )
-                          }
-                        />
-                        <span className="text-sm text-slate-700">{item.name}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
         {mode === "member" && (
           <div className="flex flex-col justify-between rounded-xl border border-slate-200 bg-white px-4 py-3">
             <span className="text-xs uppercase tracking-wide text-slate-500">Total logged</span>
@@ -1353,7 +1270,7 @@ export default function TimeDashboard({
                 Compact per-member task split for the selected day.
               </p>
               <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {[...filteredTeamMembers]
+                {[...teamData.members]
                   .sort((a, b) => {
                     const aIsYar = a.name.trim().toLowerCase() === "yar";
                     const bIsYar = b.name.trim().toLowerCase() === "yar";
@@ -1476,7 +1393,7 @@ export default function TimeDashboard({
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredTeamWeekRows.map((row, index) => (
+                    {teamWeekData.members.map((row, index) => (
                       <tr key={row.name} className="border-b border-slate-100">
                         <td className="px-2 py-2 font-semibold text-slate-900">{index + 1}</td>
                         <td className="px-2 py-2 text-slate-800">
@@ -1518,6 +1435,52 @@ export default function TimeDashboard({
             <p className="text-sm text-slate-500">
               One shared daily timeline for everyone. Matching vertical positions indicate overlap.
             </p>
+            <div className="mt-3 relative max-w-xs" ref={memberPickerRef}>
+              <button
+                type="button"
+                onClick={() => setMemberPickerOpen((open) => !open)}
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-left text-sm text-slate-900"
+              >
+                Visible calendars: {selectedMembers.length}
+              </button>
+              {memberPickerOpen && (
+                <div className="absolute z-40 mt-2 max-h-64 w-full overflow-auto rounded-xl border border-slate-200 bg-white p-2 shadow-xl">
+                  <div className="mb-2 flex items-center justify-between gap-2 px-1">
+                    <button
+                      type="button"
+                      className="text-xs font-semibold text-sky-700"
+                      onClick={() => setSelectedMembers(members.map((item) => item.name))}
+                    >
+                      Select all
+                    </button>
+                    <button
+                      type="button"
+                      className="text-xs font-semibold text-sky-700"
+                      onClick={() => setSelectedMembers([])}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  {members.map((item) => {
+                    const checked = selectedMembers.includes(item.name);
+                    return (
+                      <label key={item.name} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() =>
+                            setSelectedMembers((prev) =>
+                              prev.includes(item.name) ? prev.filter((name) => name !== item.name) : [...prev, item.name]
+                            )
+                          }
+                        />
+                        <span className="text-sm text-slate-700">{item.name}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
             <div ref={allCalendarsScrollRef} className="mt-4 max-h-[72vh] overflow-auto">
               <div className="grid min-w-[760px] grid-cols-[3.5rem_1fr] gap-2">
                 <div className="relative" style={{ height: `${HOURS_IN_DAY * HOUR_HEIGHT}px` }}>
@@ -1561,7 +1524,7 @@ export default function TimeDashboard({
                         ))}
 
                         {memberTimeline.blocks.map((block) => {
-                          const sourceEntry = filteredTeamMembers
+                          const sourceEntry = teamData.members
                             .find((item) => item.name === memberTimeline.name)
                             ?.entries.find(
                               (entry) => `${entry.id}-${new Date(entry.start).getTime()}` === block.id
