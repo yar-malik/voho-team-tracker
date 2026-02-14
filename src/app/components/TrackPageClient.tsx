@@ -224,6 +224,13 @@ function getPastelProjectStyle(project: string, projectColor: string | null | un
   return getProjectSurfaceColors(project, projectColor);
 }
 
+function getProjectColorForName(projects: ProjectItem[], projectName: string): string | null {
+  const normalized = projectName.trim().toLowerCase();
+  if (!normalized) return null;
+  const match = projects.find((project) => project.name.trim().toLowerCase() === normalized);
+  return match?.color ?? null;
+}
+
 export default function TrackPageClient({ memberName }: { memberName: string }) {
   const [date, setDate] = useState(formatLocalDateInput(new Date()));
   const [refreshTick, setRefreshTick] = useState(0);
@@ -487,6 +494,10 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
     if (!query) return sorted;
     return sorted.filter((project) => project.name.toLowerCase().includes(query));
   }, [modalProjectSearch, projects]);
+  const modalSelectedProjectColor = useMemo(
+    () => getProjectColorForName(projects, entryEditor?.project ?? ""),
+    [projects, entryEditor?.project]
+  );
 
   function emitTimerChanged(detail: { memberName: string; isRunning: boolean; startAt?: string | null; durationSeconds?: number }) {
     window.dispatchEvent(new CustomEvent("voho-timer-changed", { detail }));
@@ -799,7 +810,7 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
                     </svg>
                     <span
                       className="inline-block h-2.5 w-2.5 rounded-full"
-                      style={{ backgroundColor: getProjectBaseColor(entryEditor.project || "No project") }}
+                      style={{ backgroundColor: getProjectBaseColor(entryEditor.project || "No project", modalSelectedProjectColor) }}
                     />
                     <span className="max-w-[150px] truncate">{entryEditor.project || "No project"}</span>
                   </button>

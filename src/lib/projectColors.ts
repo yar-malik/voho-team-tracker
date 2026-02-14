@@ -33,12 +33,12 @@ function hashText(value: string): number {
 export function getProjectBaseColor(projectName: string, explicitColor?: string | null): string {
   const rawExplicit = explicitColor?.trim() ?? "";
   if (/^#[0-9a-fA-F]{6}$/.test(rawExplicit)) {
-    const normalizedExplicit = rawExplicit.toUpperCase();
-    if (PALETTE_SET.has(normalizedExplicit)) return normalizedExplicit;
+    return rawExplicit.toUpperCase();
   }
   const normalized = projectName.trim().toLowerCase();
   if (!normalized || normalized === "no project") return "#CBD5E1";
-  return PROJECT_PASTEL_HEX[hashText(normalized) % PROJECT_PASTEL_HEX.length];
+  const hashed = PROJECT_PASTEL_HEX[hashText(normalized) % PROJECT_PASTEL_HEX.length];
+  return PALETTE_SET.has(hashed.toUpperCase()) ? hashed : DEFAULT_PROJECT_COLOR;
 }
 
 export function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
