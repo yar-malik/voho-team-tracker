@@ -86,6 +86,7 @@ const MIN_BLOCK_HEIGHT = 24;
 const RANKING_ENTRY_CAP_SECONDS = 4 * 60 * 60;
 const EXCLUDED_PROJECT_NAME = "non-work-task";
 const AUTO_REFRESH_INTERVAL_MS = 15 * 60 * 1000;
+const LIVE_REFRESH_INTERVAL_MS = 20 * 1000;
 const MEMBER_LINK_CLASS =
   "font-semibold text-sky-700 underline decoration-sky-400 decoration-2 underline-offset-2 hover:text-sky-800";
 
@@ -585,6 +586,14 @@ export default function TimeDashboard({
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
+      if (document.visibilityState === "hidden") return;
+      setRefreshTick((value) => value + 1);
+    }, LIVE_REFRESH_INTERVAL_MS);
+    return () => window.clearInterval(intervalId);
+  }, [mode, member, date]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
       setRelativeNowMs(Date.now());
     }, 30 * 1000);
     return () => window.clearInterval(intervalId);
@@ -636,8 +645,14 @@ export default function TimeDashboard({
       }
     };
 
+    const onFocusRefresh = () => setRefreshTick((value) => value + 1);
+
+    window.addEventListener("focus", onFocusRefresh);
     window.addEventListener("voho-timer-changed", onTimerChanged as EventListener);
-    return () => window.removeEventListener("voho-timer-changed", onTimerChanged as EventListener);
+    return () => {
+      window.removeEventListener("focus", onFocusRefresh);
+      window.removeEventListener("voho-timer-changed", onTimerChanged as EventListener);
+    };
   }, []);
 
   const runningEntry = useMemo(() => {

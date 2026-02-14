@@ -86,7 +86,7 @@ export default function GlobalTimerBar({ memberName }: { memberName: string | nu
       const controller = saveControllerRef.current;
 
       try {
-        await fetch("/api/time-entries/current", {
+        const response = await fetch("/api/time-entries/current", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -98,6 +98,23 @@ export default function GlobalTimerBar({ memberName }: { memberName: string | nu
           keepalive,
           cache: "no-store",
         });
+        if (!response.ok) return;
+        const payload = (await response.json()) as { current?: RunningTimer | null };
+        if (payload.current) {
+          setCurrent(payload.current);
+          window.dispatchEvent(
+            new CustomEvent("voho-timer-changed", {
+              detail: {
+                memberName,
+                isRunning: true,
+                startAt: payload.current.startAt,
+                durationSeconds: payload.current.durationSeconds,
+                description: payload.current.description ?? nextDescription,
+                projectName: payload.current.projectName ?? nextProjectName,
+              },
+            })
+          );
+        }
       } catch (error) {
         if (error instanceof Error && error.name === "AbortError") return;
         // Best-effort.
