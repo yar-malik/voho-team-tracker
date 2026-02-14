@@ -78,6 +78,7 @@ export default function GlobalTimerBar({ memberName }: { memberName: string | nu
   const [busy, setBusy] = useState(false);
   const [timerInput, setTimerInput] = useState("0:00:00");
   const [timerInputError, setTimerInputError] = useState<string | null>(null);
+  const [timerInputDirty, setTimerInputDirty] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerSearch, setPickerSearch] = useState("");
   const pickerRef = useRef<HTMLDivElement | null>(null);
@@ -271,6 +272,12 @@ export default function GlobalTimerBar({ memberName }: { memberName: string | nu
     return Math.max(0, Math.floor((nowMs - startedAtMs) / 1000));
   }, [current, nowMs]);
 
+  const timerDisplayValue = useMemo(() => {
+    if (timerInputDirty) return timerInput;
+    if (current) return formatTimer(runningSeconds);
+    return timerInput;
+  }, [timerInputDirty, timerInput, current, runningSeconds]);
+
   const selectedProjectColor = useMemo(() => {
     const normalized = projectName.trim().toLowerCase();
     if (!normalized) return null;
@@ -286,7 +293,7 @@ export default function GlobalTimerBar({ memberName }: { memberName: string | nu
   }, [projects, pickerSearch]);
 
   const createDurationEntry = useCallback(async () => {
-    if (!memberName || current) return;
+    if (!memberName) return;
     const normalizedInput = timerInput.trim();
     if (!normalizedInput || normalizedInput === "0:00:00") return;
     const durationMinutes = parseDurationMinutes(timerInput);
@@ -298,6 +305,30 @@ export default function GlobalTimerBar({ memberName }: { memberName: string | nu
     setTimerInputError(null);
     setBusy(true);
     try {
+      if (current) {
+        await persistRunningDraft(description, projectName);
+        const stopRes = await fetch("/api/time-entries/stop", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ member: memberName, tzOffset: new Date().getTimezoneOffset() }),
+        });
+        if (!stopRes.ok) {
+          setTimerInputError("Failed to stop active timer first");
+          return;
+        }
+        setCurrent(null);
+        window.dispatchEvent(
+          new CustomEvent("voho-timer-changed", {
+            detail: {
+              memberName,
+              isRunning: false,
+              startAt: null,
+              durationSeconds: 0,
+            },
+          })
+        );
+      }
+
       const startAtIso = new Date(Date.now() - durationMinutes * 60 * 1000).toISOString();
       const res = await fetch("/api/time-entries/manual", {
         method: "POST",
@@ -317,13 +348,14 @@ export default function GlobalTimerBar({ memberName }: { memberName: string | nu
         return;
       }
       setTimerInput("0:00:00");
+      setTimerInputDirty(false);
       window.dispatchEvent(new CustomEvent("voho-entries-changed", { detail: { memberName } }));
     } catch {
       setTimerInputError("Failed to add duration entry");
     } finally {
       setBusy(false);
     }
-  }, [memberName, current, timerInput, description, projectName]);
+  }, [memberName, current, timerInput, description, projectName, persistRunningDraft]);
 
   if (!memberName) return null;
 
@@ -406,25 +438,27 @@ export default function GlobalTimerBar({ memberName }: { memberName: string | nu
         <div className="flex min-w-[170px] flex-col gap-1">
           <input
             type="text"
-            value={current ? formatTimer(runningSeconds) : timerInput}
+            value={timerDisplayValue}
             onChange={(event) => {
-              if (current) return;
               setTimerInput(event.target.value);
+              setTimerInputDirty(true);
               if (timerInputError) setTimerInputError(null);
             }}
             onFocus={(event) => {
-              if (current) return;
               event.currentTarget.select();
             }}
             onKeyDown={(event) => {
-              if (current) return;
               if (event.key === "Enter") {
                 event.preventDefault();
                 void createDurationEntry();
               }
             }}
+            onBlur={() => {
+              if (!timerInput.trim()) {
+                setTimerInput("0:00:00");
+              }
+            }}
             placeholder="0:00:00"
-            readOnly={Boolean(current)}
             disabled={busy}
             className={`h-11 rounded-lg border px-3 text-right text-3xl font-semibold tabular-nums text-slate-900 outline-none disabled:cursor-not-allowed disabled:bg-slate-100 ${
               timerInputError ? "border-rose-400" : "border-slate-300 focus:border-sky-400"
@@ -453,6 +487,7 @@ export default function GlobalTimerBar({ memberName }: { memberName: string | nu
               const data = (await res.json()) as { current?: RunningTimer | null };
               if (res.ok && data.current) {
                 setCurrent(data.current);
+                setTimerInputDirty(false);
                 window.dispatchEvent(
                   new CustomEvent("voho-timer-changed", {
                     detail: {
@@ -494,6 +529,7 @@ export default function GlobalTimerBar({ memberName }: { memberName: string | nu
                 setDescription("");
                 setProjectName("");
                 setTimerInput("0:00:00");
+                setTimerInputDirty(false);
                 window.dispatchEvent(
                   new CustomEvent("voho-timer-changed", {
                     detail: {

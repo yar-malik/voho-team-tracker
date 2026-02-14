@@ -728,6 +728,23 @@ export default function TimeDashboard({
     return buildTeamRanking(teamData.members);
   }, [teamData]);
 
+  const dailyRankingSeries = useMemo(() => {
+    if (!teamData) return [] as Array<{ name: string; seconds: number }>;
+    return [...teamData.members]
+      .map((item) => ({ name: item.name, seconds: Math.max(0, item.totalSeconds) }))
+      .sort((a, b) => {
+        if (b.seconds !== a.seconds) return b.seconds - a.seconds;
+        return a.name.localeCompare(b.name);
+      });
+  }, [teamData]);
+
+  const dailyRankingMaxHours = useMemo(() => {
+    const maxSeconds = dailyRankingSeries.reduce((max, row) => Math.max(max, row.seconds), 0);
+    const rawHours = maxSeconds / 3600;
+    const rounded = Math.ceil(rawHours);
+    return Math.max(1, rounded);
+  }, [dailyRankingSeries]);
+
   const teamTimeline = useMemo(() => {
     if (!teamData) return [] as Array<{ name: string; blocks: TimelineBlock[]; maxLanes: number }>;
     const allowed = new Set(selectedMembers);
@@ -964,24 +981,49 @@ export default function TimeDashboard({
               <span className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Daily ranking</span>
               <span className="text-xs text-slate-500">{date}</span>
             </div>
-            {teamRanking.length === 0 ? (
+            {dailyRankingSeries.length === 0 ? (
               <p className="mt-3 text-sm text-slate-500">No ranking data yet.</p>
             ) : (
-            <div className="mt-3 flex h-32 items-end gap-2">
-                {teamRanking.slice(0, 8).map((row) => {
-                  const maxSeconds = teamRanking[0]?.rankedSeconds ?? 0;
-                  const barHeight = maxSeconds > 0 ? Math.max(14, Math.round((row.rankedSeconds / maxSeconds) * 100)) : 14;
-                  return (
-                    <div key={row.name} className="flex min-w-[64px] flex-1 flex-col items-center gap-1">
+              <div className="mt-3 grid grid-cols-[3.2rem_1fr] gap-2">
+                <div className="relative h-40">
+                  {[0, 1, 2, 3, 4].map((step) => {
+                    const value = Math.round((dailyRankingMaxHours * (4 - step)) * 10) / 10;
+                    return (
                       <div
-                        className="w-full rounded-t-md bg-gradient-to-t from-[#0BA5E9] to-[#67D0F8]"
-                        style={{ height: `${barHeight}%` }}
-                        title={`${row.name}: ${formatDuration(row.rankedSeconds)}`}
-                      />
-                      <p className="w-full truncate text-center text-[11px] font-semibold text-slate-700">{row.name}</p>
-                    </div>
-                  );
-                })}
+                        key={step}
+                        className="absolute right-0 text-[10px] font-medium text-slate-500"
+                        style={{ top: `${step * 25 - 6}%` }}
+                      >
+                        {value}h
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="relative h-40 rounded-lg border border-slate-200 bg-slate-50 px-2 pt-2">
+                  {[0, 1, 2, 3, 4].map((step) => (
+                    <div
+                      key={`grid-${step}`}
+                      className="absolute left-0 right-0 border-t border-slate-200"
+                      style={{ top: `${step * 25}%` }}
+                    />
+                  ))}
+                  <div className="relative z-10 flex h-full items-end gap-2">
+                    {dailyRankingSeries.map((row) => {
+                      const hours = row.seconds / 3600;
+                      const heightPercent = Math.max(6, (hours / dailyRankingMaxHours) * 100);
+                      return (
+                        <div key={row.name} className="flex min-w-[56px] flex-1 flex-col items-center gap-1">
+                          <div
+                            className="w-full rounded-t-md bg-gradient-to-t from-[#0BA5E9] to-[#67D0F8]"
+                            style={{ height: `${heightPercent}%` }}
+                            title={`${row.name}: ${formatDuration(row.seconds)}`}
+                          />
+                          <p className="w-full truncate text-center text-[11px] font-semibold text-slate-700">{row.name}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -1573,14 +1615,14 @@ export default function TimeDashboard({
           }}
         >
           <div
-            className="w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-6 shadow-xl"
+            className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-4 shadow-xl"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <button
                   type="button"
-                  className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-sky-100 text-[#0BA5E9] hover:bg-sky-200"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-sky-100 text-[#0BA5E9] hover:bg-sky-200"
                   title="Start new timer with this entry"
                   onClick={async () => {
                     if (!selectedEntry || !entryEditor) return;
@@ -1615,7 +1657,7 @@ export default function TimeDashboard({
                 </button>
                 <button
                   type="button"
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50"
                   title="Duplicate values"
                   onClick={() => {
                     if (!entryEditor || !selectedEntry) return;
@@ -1630,7 +1672,7 @@ export default function TimeDashboard({
                 </button>
                 <button
                   type="button"
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50"
                   title="Entry actions"
                 >
                   ⋮
@@ -1648,7 +1690,7 @@ export default function TimeDashboard({
               </button>
             </div>
             {entryEditor && (
-              <div className="mt-5 space-y-4">
+              <div className="mt-4 space-y-3">
                 <input
                   type="text"
                   value={entryEditor.description}
@@ -1656,7 +1698,7 @@ export default function TimeDashboard({
                     setEntryEditor((prev) => (prev ? { ...prev, description: event.target.value, error: null } : prev))
                   }
                   placeholder="Description"
-                  className="w-full rounded-lg border border-slate-300 px-4 py-3 text-2xl font-semibold"
+                  className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-xl font-semibold"
                 />
                 <div className="flex flex-wrap items-center gap-3">
                   <input
@@ -1666,10 +1708,10 @@ export default function TimeDashboard({
                       setEntryEditor((prev) => (prev ? { ...prev, project: event.target.value, error: null } : prev))
                     }
                     placeholder="Project"
-                    className="min-w-[220px] rounded-full border border-amber-200 bg-amber-50 px-5 py-2 text-3xl font-medium text-amber-700"
+                    className="min-w-[190px] rounded-full border border-amber-200 bg-amber-50 px-4 py-1.5 text-xl font-medium text-amber-700"
                   />
-                  <span className="text-2xl text-slate-400">🏷</span>
-                  <span className="text-3xl text-slate-300">$</span>
+                  <span className="text-xl text-slate-400">🏷</span>
+                  <span className="text-2xl text-slate-300">$</span>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
                   <input
@@ -1678,18 +1720,18 @@ export default function TimeDashboard({
                     onChange={(event) =>
                       setEntryEditor((prev) => (prev ? { ...prev, startTime: event.target.value, error: null } : prev))
                     }
-                    className="w-[180px] rounded-xl border border-slate-300 px-4 py-2 text-4xl font-medium text-center"
+                    className="w-[150px] rounded-xl border border-slate-300 px-3 py-2 text-2xl font-medium text-center"
                   />
-                  <span className="text-4xl text-slate-400">→</span>
+                  <span className="text-2xl text-slate-400">→</span>
                   <input
                     type="time"
                     value={entryEditor.stopTime}
                     onChange={(event) =>
                       setEntryEditor((prev) => (prev ? { ...prev, stopTime: event.target.value, error: null } : prev))
                     }
-                    className="w-[180px] rounded-xl border border-slate-300 px-4 py-2 text-4xl font-medium text-center"
+                    className="w-[150px] rounded-xl border border-slate-300 px-3 py-2 text-2xl font-medium text-center"
                   />
-                  <span className="min-w-[120px] text-4xl font-medium tabular-nums text-slate-900">
+                  <span className="min-w-[96px] text-2xl font-medium tabular-nums text-slate-900">
                     {(() => {
                       const startIso = buildIsoFromDateAndTime(date, entryEditor.startTime);
                       const stopIso = buildIsoFromDateAndTime(date, entryEditor.stopTime);
@@ -1745,7 +1787,7 @@ export default function TimeDashboard({
                       setEntryEditor((prev) => (prev ? { ...prev, saving: false, error: "Failed to update entry." } : prev));
                     }
                   }}
-                  className="w-[220px] rounded-xl bg-[#0BA5E9] px-6 py-3 text-3xl font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+                  className="w-[180px] rounded-xl bg-[#0BA5E9] px-4 py-2.5 text-xl font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
                 >
                   {entryEditor.saving ? "Saving..." : "Save changes"}
                 </button>

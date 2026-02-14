@@ -48,16 +48,6 @@ function PomodoroIcon({ className }: IconProps) {
   );
 }
 
-function ReportsIcon({ className }: IconProps) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
-      <rect x="4" y="11" width="3.5" height="9" rx="1.5" />
-      <rect x="10.25" y="6.5" width="3.5" height="13.5" rx="1.5" />
-      <rect x="16.5" y="14" width="3.5" height="6" rx="1.5" />
-    </svg>
-  );
-}
-
 function TeamIcon({ className }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
@@ -336,12 +326,6 @@ export default function PlatformShell({
             <div>
               <p className="px-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Analyze</p>
               <div className="mt-2 space-y-1.5">
-                <Link href="/reports" prefetch className={navClass(isActive(pathname, "/reports"))}>
-                  <span className="inline-flex items-center gap-2">
-                    <ReportsIcon className={iconClass()} />
-                    <span>Reports</span>
-                  </span>
-                </Link>
                 <Link href="/team-overview" prefetch className={navClass(isActive(pathname, "/team-overview"))}>
                   <span className="inline-flex items-center gap-2">
                     <TeamIcon className={iconClass()} />
@@ -433,7 +417,7 @@ export default function PlatformShell({
 
           <div className="mt-4 rounded-xl border border-slate-200 bg-sky-50 p-3 text-xs text-slate-600">
             <p className="font-semibold text-slate-700">Tip</p>
-            <p className="mt-1">Use Tracking daily and review outcomes in Reports.</p>
+            <p className="mt-1">Use Tracking daily and review outcomes in Team overview.</p>
           </div>
 
           <button

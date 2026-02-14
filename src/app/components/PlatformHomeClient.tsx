@@ -8,7 +8,7 @@ type Member = { name: string; email?: string | null; role?: string | null };
 type Project = { key: string; name: string; source: "manual" | "external" };
 type Kpi = { id: number; member: string; label: string; value: string; notes: string | null };
 
-type Section = "reports" | "team" | "projects" | "members" | "kpis";
+type Section = "team" | "projects" | "members" | "kpis";
 
 export default function PlatformHomeClient({
   members,
@@ -21,7 +21,7 @@ export default function PlatformHomeClient({
   kpis: Kpi[];
   currentUserEmail: string | null;
 }) {
-  const [section, setSection] = useState<Section>("reports");
+  const [section, setSection] = useState<Section>("team");
   const [allProjects, setAllProjects] = useState<Project[]>(projects);
   const [allMembers, setAllMembers] = useState<Member[]>(members);
   const [allKpis, setAllKpis] = useState<Kpi[]>(kpis);
@@ -46,13 +46,6 @@ export default function PlatformHomeClient({
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Voho Track</p>
           <p className="mt-2 text-sm text-slate-600">{currentUserEmail ?? "Signed in"}</p>
           <nav className="mt-6 space-y-2 text-sm">
-            <button
-              type="button"
-              onClick={() => setSection("reports")}
-              className={`block w-full rounded-lg px-3 py-2 text-left font-medium ${section === "reports" ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"}`}
-            >
-              Reports
-            </button>
             <button
               type="button"
               onClick={() => setSection("team")}
@@ -96,8 +89,8 @@ export default function PlatformHomeClient({
         </aside>
 
         <main className="min-w-0 flex-1 space-y-4">
-          {(section === "reports" || section === "team") && (
-            <TimeDashboard members={dashboardMembers} initialMode={section === "team" ? "team" : "all"} />
+          {section === "team" && (
+            <TimeDashboard members={dashboardMembers} initialMode="team" />
           )}
 
           {section === "projects" && (
