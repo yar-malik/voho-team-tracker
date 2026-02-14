@@ -1,9 +1,19 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type Member = { name: string };
 type Kpi = { id: number; member: string; label: string; value: string; notes: string | null };
+
+const POMODORO_SECONDS = 25 * 60;
+const POMODORO_STORAGE_KEY = "voho_pomodoro_state_v1";
+
+function formatPomodoro(seconds: number) {
+  const safe = Math.max(0, Math.floor(seconds));
+  const minutes = Math.floor(safe / 60);
+  const remainder = safe % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
+}
 
 export default function KpisPageClient({
   members,
@@ -19,16 +29,127 @@ export default function KpisPageClient({
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pomodoroName, setPomodoroName] = useState("Focus Session");
+  const [pomodoroSecondsLeft, setPomodoroSecondsLeft] = useState(POMODORO_SECONDS);
+  const [pomodoroRunning, setPomodoroRunning] = useState(false);
+  const [completedPomodoros, setCompletedPomodoros] = useState(0);
 
   const sortedKpis = useMemo(
     () => [...kpis].sort((a, b) => a.member.localeCompare(b.member) || a.label.localeCompare(b.label)),
     [kpis]
   );
 
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(POMODORO_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as {
+        name?: string;
+        secondsLeft?: number;
+        running?: boolean;
+        completed?: number;
+        updatedAt?: number;
+      };
+      const restoredName = parsed.name?.trim() || "Focus Session";
+      let restoredSeconds = Math.max(0, Math.min(POMODORO_SECONDS, Number(parsed.secondsLeft ?? POMODORO_SECONDS)));
+      const restoredRunning = Boolean(parsed.running);
+      const updatedAt = Number(parsed.updatedAt ?? Date.now());
+      if (restoredRunning) {
+        const elapsed = Math.max(0, Math.floor((Date.now() - updatedAt) / 1000));
+        restoredSeconds = Math.max(0, restoredSeconds - elapsed);
+      }
+      setPomodoroName(restoredName);
+      setPomodoroSecondsLeft(restoredSeconds);
+      setPomodoroRunning(restoredRunning && restoredSeconds > 0);
+      setCompletedPomodoros(Math.max(0, Number(parsed.completed ?? 0)));
+    } catch {
+      // Ignore invalid local state.
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        POMODORO_STORAGE_KEY,
+        JSON.stringify({
+          name: pomodoroName,
+          secondsLeft: pomodoroSecondsLeft,
+          running: pomodoroRunning,
+          completed: completedPomodoros,
+          updatedAt: Date.now(),
+        })
+      );
+    } catch {
+      // Ignore storage failures.
+    }
+  }, [pomodoroName, pomodoroSecondsLeft, pomodoroRunning, completedPomodoros]);
+
+  useEffect(() => {
+    if (!pomodoroRunning) return;
+    const timer = window.setInterval(() => {
+      setPomodoroSecondsLeft((prev) => {
+        if (prev <= 1) {
+          setPomodoroRunning(false);
+          setCompletedPomodoros((count) => count + 1);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [pomodoroRunning]);
+
+  const pomodoroProgress = useMemo(() => {
+    const consumed = POMODORO_SECONDS - pomodoroSecondsLeft;
+    return Math.max(0, Math.min(100, Math.round((consumed / POMODORO_SECONDS) * 100)));
+  }, [pomodoroSecondsLeft]);
+
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <h1 className="text-2xl font-semibold text-slate-900">KPIs</h1>
       <p className="mt-1 text-sm text-slate-600">Member KPI registry managed inside the platform.</p>
+
+      <div className="mt-4 rounded-2xl border border-sky-200 bg-sky-50/70 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-700">Pomodoro</p>
+            <input
+              type="text"
+              value={pomodoroName}
+              onChange={(event) => setPomodoroName(event.target.value)}
+              className="mt-1 w-full rounded-lg border border-sky-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-800 md:w-[280px]"
+            />
+          </div>
+          <div className="text-right">
+            <p className="text-3xl font-semibold tabular-nums text-slate-900">{formatPomodoro(pomodoroSecondsLeft)}</p>
+            <p className="text-xs text-slate-600">Completed today: {completedPomodoros}</p>
+          </div>
+        </div>
+
+        <div className="mt-3 h-2 w-full rounded-full bg-sky-100">
+          <div className="h-full rounded-full bg-[#0BA5E9]" style={{ width: `${pomodoroProgress}%` }} />
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setPomodoroRunning((running) => !running)}
+            className="rounded-lg bg-[#0BA5E9] px-4 py-2 text-sm font-semibold text-white hover:bg-[#0994cf]"
+          >
+            {pomodoroRunning ? "Pause" : pomodoroSecondsLeft === 0 ? "Start next 25m" : "Start 25m"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setPomodoroRunning(false);
+              setPomodoroSecondsLeft(POMODORO_SECONDS);
+            }}
+            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            Reset
+          </button>
+        </div>
+      </div>
 
       <div className="mt-4 grid gap-2 md:grid-cols-2">
         <select
@@ -126,4 +247,3 @@ export default function KpisPageClient({
     </section>
   );
 }
-
