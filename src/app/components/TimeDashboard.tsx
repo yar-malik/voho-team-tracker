@@ -342,9 +342,9 @@ function buildTaskProjectSummary(entries: TimeEntry[]) {
   return Array.from(totals.values()).sort((a, b) => b.seconds - a.seconds);
 }
 
-function formatAgoFromMs(timestampMs: number): string {
+function formatAgoFromMs(timestampMs: number, nowMs = Date.now()): string {
   if (!Number.isFinite(timestampMs)) return "—";
-  const diffMs = Math.max(0, Date.now() - timestampMs);
+  const diffMs = Math.max(0, nowMs - timestampMs);
   const totalMinutes = Math.floor(diffMs / (60 * 1000));
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
@@ -410,6 +410,8 @@ export default function TimeDashboard({
     dataSource: "db" | null;
   } | null>(null);
   const [hoverTooltip, setHoverTooltip] = useState<HoverTooltipState | null>(null);
+  const [relativeNowMs, setRelativeNowMs] = useState(Date.now());
+  const [lastStoppedAtByMember, setLastStoppedAtByMember] = useState<Record<string, number>>({});
   const dayCalendarScrollRef = useRef<HTMLDivElement | null>(null);
   const allCalendarsScrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -579,6 +581,63 @@ export default function TimeDashboard({
     }, AUTO_REFRESH_INTERVAL_MS);
 
     return () => window.clearInterval(intervalId);
+  }, []);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setRelativeNowMs(Date.now());
+    }, 30 * 1000);
+    return () => window.clearInterval(intervalId);
+  }, []);
+
+  useEffect(() => {
+    const onTimerChanged = (
+      event: Event
+    ) => {
+      const custom = event as CustomEvent<{
+        memberName?: string;
+        isRunning?: boolean;
+        startAt?: string | null;
+        durationSeconds?: number;
+        description?: string | null;
+        projectName?: string | null;
+      }>;
+      const detail = custom.detail;
+      if (!detail?.memberName) return;
+      const targetMember = detail.memberName.trim().toLowerCase();
+
+      setTeamData((prev) => {
+        if (!prev) return prev;
+        const nextMembers = prev.members.map((memberData) => {
+          if (memberData.name.trim().toLowerCase() !== targetMember) return memberData;
+          if (detail.isRunning) {
+            return {
+              ...memberData,
+              current: {
+                id: Number(detail.durationSeconds ?? 0) + Date.now(),
+                description: detail.description ?? memberData.current?.description ?? null,
+                start: detail.startAt ?? new Date().toISOString(),
+                stop: null,
+                duration: -1,
+                project_name: detail.projectName ?? memberData.current?.project_name ?? null,
+              },
+            };
+          }
+          return {
+            ...memberData,
+            current: null,
+          };
+        });
+        return { ...prev, members: nextMembers };
+      });
+
+      if (!detail.isRunning) {
+        setLastStoppedAtByMember((prev) => ({ ...prev, [targetMember]: Date.now() }));
+      }
+    };
+
+    window.addEventListener("voho-timer-changed", onTimerChanged as EventListener);
+    return () => window.removeEventListener("voho-timer-changed", onTimerChanged as EventListener);
   }, []);
 
   const runningEntry = useMemo(() => {
@@ -1139,7 +1198,15 @@ export default function TimeDashboard({
                 Compact per-member task split for the selected day.
               </p>
               <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {teamData.members.map((memberData) => {
+                {[...teamData.members]
+                  .sort((a, b) => {
+                    const aIsYar = a.name.trim().toLowerCase() === "yar";
+                    const bIsYar = b.name.trim().toLowerCase() === "yar";
+                    if (aIsYar && !bIsYar) return -1;
+                    if (!aIsYar && bIsYar) return 1;
+                    return a.name.localeCompare(b.name);
+                  })
+                  .map((memberData) => {
                   const cardEntries = memberData.entries.filter((entry) => !isExcludedFromRanking(entry.project_name));
                   const running = memberData.current ?? cardEntries.find((entry) => entry.stop === null) ?? null;
                   const memberSummary = buildTaskProjectSummary(cardEntries).slice(0, 4);
@@ -1148,6 +1215,8 @@ export default function TimeDashboard({
                     if (Number.isNaN(endMs)) return latest;
                     return Math.max(latest, endMs);
                   }, Number.NEGATIVE_INFINITY);
+                  const trackedStopMs = lastStoppedAtByMember[memberData.name.trim().toLowerCase()] ?? Number.NEGATIVE_INFINITY;
+                  const displayLastActivityMs = Math.max(lastActivityMs, trackedStopMs);
                   const cardTotalSeconds = cardEntries.reduce((total, entry) => total + getEntrySeconds(entry), 0);
                   const maxTaskSeconds = memberSummary[0]?.seconds ?? 0;
                   return (
@@ -1171,7 +1240,7 @@ export default function TimeDashboard({
                           </span>
                           {!running && (
                             <span className="rounded-md bg-slate-200 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
-                              Idle since {formatAgoFromMs(lastActivityMs)}
+                              Idle since {formatAgoFromMs(displayLastActivityMs, relativeNowMs)}
                             </span>
                           )}
                         </div>

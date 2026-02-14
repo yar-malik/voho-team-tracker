@@ -263,6 +263,8 @@ export default function GlobalTimerBar({ memberName }: { memberName: string | nu
                       isRunning: true,
                       startAt: data.current.startAt,
                       durationSeconds: data.current.durationSeconds,
+                      description: description.trim() || null,
+                      projectName: projectName.trim() || null,
                     },
                   })
                 );
@@ -296,7 +298,14 @@ export default function GlobalTimerBar({ memberName }: { memberName: string | nu
                 setProjectName("");
                 window.dispatchEvent(
                   new CustomEvent("voho-timer-changed", {
-                    detail: { memberName, isRunning: false, startAt: null, durationSeconds: 0 },
+                    detail: {
+                      memberName,
+                      isRunning: false,
+                      startAt: null,
+                      durationSeconds: 0,
+                      description: null,
+                      projectName: null,
+                    },
                   })
                 );
               }
