@@ -70,8 +70,8 @@ export default function GlobalTimerBar({ memberName }: { memberName: string | nu
   const [projectName, setProjectName] = useState("");
   const [nowMs, setNowMs] = useState(0);
   const [busy, setBusy] = useState(false);
-  const [quickDuration, setQuickDuration] = useState("");
-  const [quickDurationError, setQuickDurationError] = useState<string | null>(null);
+  const [timerInput, setTimerInput] = useState("");
+  const [timerInputError, setTimerInputError] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerSearch, setPickerSearch] = useState("");
   const pickerRef = useRef<HTMLDivElement | null>(null);
@@ -281,13 +281,13 @@ export default function GlobalTimerBar({ memberName }: { memberName: string | nu
 
   const createDurationEntry = useCallback(async () => {
     if (!memberName || current) return;
-    const durationMinutes = parseDurationMinutes(quickDuration);
+    const durationMinutes = parseDurationMinutes(timerInput);
     if (!durationMinutes) {
-      setQuickDurationError("Use a format like 25 min or 1 hour");
+      setTimerInputError("Use a format like 25 min or 1 hour");
       return;
     }
 
-    setQuickDurationError(null);
+    setTimerInputError(null);
     setBusy(true);
     try {
       const startAtIso = new Date(Date.now() - durationMinutes * 60 * 1000).toISOString();
@@ -305,17 +305,17 @@ export default function GlobalTimerBar({ memberName }: { memberName: string | nu
       });
       if (!res.ok) {
         const payload = (await res.json()) as { error?: string };
-        setQuickDurationError(payload.error || "Failed to add duration entry");
+        setTimerInputError(payload.error || "Failed to add duration entry");
         return;
       }
-      setQuickDuration("");
+      setTimerInput("");
       window.dispatchEvent(new CustomEvent("voho-entries-changed", { detail: { memberName } }));
     } catch {
-      setQuickDurationError("Failed to add duration entry");
+      setTimerInputError("Failed to add duration entry");
     } finally {
       setBusy(false);
     }
-  }, [memberName, current, quickDuration, description, projectName]);
+  }, [memberName, current, timerInput, description, projectName]);
 
   if (!memberName) return null;
 
@@ -395,27 +395,30 @@ export default function GlobalTimerBar({ memberName }: { memberName: string | nu
           )}
         </div>
 
-        <p className="min-w-[95px] text-right text-3xl font-semibold tabular-nums text-slate-900">{formatTimer(runningSeconds)}</p>
-
         <div className="flex min-w-[170px] flex-col gap-1">
           <input
             type="text"
-            value={quickDuration}
+            value={current ? formatTimer(runningSeconds) : timerInput}
             onChange={(event) => {
-              setQuickDuration(event.target.value);
-              if (quickDurationError) setQuickDurationError(null);
+              if (current) return;
+              setTimerInput(event.target.value);
+              if (timerInputError) setTimerInputError(null);
             }}
             onKeyDown={(event) => {
+              if (current) return;
               if (event.key === "Enter") {
                 event.preventDefault();
                 void createDurationEntry();
               }
             }}
-            placeholder="25 min / 1 hour"
-            disabled={Boolean(current) || busy}
-            className="h-11 rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-700 outline-none focus:border-sky-400 disabled:cursor-not-allowed disabled:bg-slate-100"
+            placeholder="0:00:00 / 25 min / 1 hour"
+            readOnly={Boolean(current)}
+            disabled={busy}
+            className={`h-11 rounded-lg border px-3 text-right text-3xl font-semibold tabular-nums text-slate-900 outline-none disabled:cursor-not-allowed disabled:bg-slate-100 ${
+              timerInputError ? "border-rose-400" : "border-slate-300 focus:border-sky-400"
+            }`}
           />
-          {quickDurationError && <p className="text-[11px] text-rose-600">{quickDurationError}</p>}
+          {timerInputError && <p className="text-[11px] text-rose-600">{timerInputError}</p>}
         </div>
 
         <button
