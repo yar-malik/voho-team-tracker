@@ -159,6 +159,7 @@ type TeamMemberData = {
   entries: TimeEntry[];
   current: TimeEntry | null;
   totalSeconds: number;
+  lastActivityAt?: string | null;
 };
 
 type TeamRankingRow = {
@@ -1230,8 +1231,11 @@ export default function TimeDashboard({
                     if (Number.isNaN(endMs)) return latest;
                     return Math.max(latest, endMs);
                   }, Number.NEGATIVE_INFINITY);
+                  const historicalLastActivityMs = memberData.lastActivityAt
+                    ? new Date(memberData.lastActivityAt).getTime()
+                    : Number.NEGATIVE_INFINITY;
                   const trackedStopMs = lastStoppedAtByMember[memberData.name.trim().toLowerCase()] ?? Number.NEGATIVE_INFINITY;
-                  const displayLastActivityMs = Math.max(lastActivityMs, trackedStopMs);
+                  const displayLastActivityMs = Math.max(lastActivityMs, historicalLastActivityMs, trackedStopMs);
                   const cardTotalSeconds = cardEntries.reduce((total, entry) => total + getEntrySeconds(entry), 0);
                   const maxTaskSeconds = memberSummary[0]?.seconds ?? 0;
                   return (

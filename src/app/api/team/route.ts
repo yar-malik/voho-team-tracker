@@ -23,6 +23,7 @@ type MemberPayload = {
   entries: TimeEntry[];
   current: TimeEntry | null;
   totalSeconds: number;
+  lastActivityAt: string | null;
 };
 
 type StoredEntryRow = {
@@ -128,7 +129,7 @@ async function readStoredTeam(
   }
 
   const grouped = new Map<string, MemberPayload>(
-    members.map((member) => [member.name, { name: member.name, entries: [], current: null, totalSeconds: 0 }])
+    members.map((member) => [member.name, { name: member.name, entries: [], current: null, totalSeconds: 0, lastActivityAt: null }])
   );
 
   let latestSyncedAt: string | null = null;
@@ -159,6 +160,33 @@ async function readStoredTeam(
     }
     bucket.totalSeconds += Math.max(0, row.duration_seconds);
   }
+
+  await Promise.all(
+    members.map(async (member) => {
+      const aliases = Array.from(new Set(expandMemberAliases(member.name)));
+      if (aliases.length === 0) return;
+      const aliasFilter = `in.(${aliases.map((alias) => `"${alias.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`).join(",")})`;
+      const latestUrl =
+        `${base}/rest/v1/time_entries` +
+        `?select=start_at,stop_at` +
+        `&member_name=${encodeURIComponent(aliasFilter)}` +
+        `&start_at=lte.${encodeURIComponent(endIso)}` +
+        `&order=start_at.desc` +
+        `&limit=1`;
+      const latestResponse = await fetch(latestUrl, {
+        method: "GET",
+        headers: supabaseHeaders(),
+        cache: "no-store",
+      });
+      if (!latestResponse.ok) return;
+      const latestRows = (await latestResponse.json()) as Array<{ start_at: string; stop_at: string | null }>;
+      const latestRow = latestRows[0];
+      if (!latestRow) return;
+      const bucket = grouped.get(member.name);
+      if (!bucket) return;
+      bucket.lastActivityAt = latestRow.stop_at ?? latestRow.start_at;
+    })
+  );
 
   return {
     members: Array.from(grouped.values()).map((member) => ({ ...member, entries: sortEntriesByStart(member.entries) })),
