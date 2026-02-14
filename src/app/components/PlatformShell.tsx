@@ -119,7 +119,7 @@ function formatTimer(totalSeconds: number) {
 }
 
 function setFaviconHref(href: string, stateKey: "idle" | "running") {
-  const withVersion = `${href}?state=${stateKey}&v=20260215`;
+  const withVersion = `${href}?state=${stateKey}&v=20260216`;
   const relTargets = ["icon", "shortcut icon", "apple-touch-icon"];
 
   for (const rel of relTargets) {
