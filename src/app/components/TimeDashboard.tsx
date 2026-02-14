@@ -728,19 +728,6 @@ export default function TimeDashboard({
     return buildTeamRanking(teamData.members);
   }, [teamData]);
 
-  const dailyRankingBars = useMemo(() => {
-    if (!teamData) return [] as Array<{ name: string; seconds: number }>;
-    return [...teamData.members]
-      .map((item) => ({
-        name: item.name,
-        seconds: Math.max(0, item.totalSeconds ?? 0),
-      }))
-      .sort((a, b) => {
-        if (b.seconds !== a.seconds) return b.seconds - a.seconds;
-        return a.name.localeCompare(b.name);
-      });
-  }, [teamData]);
-
   const teamTimeline = useMemo(() => {
     if (!teamData) return [] as Array<{ name: string; blocks: TimelineBlock[]; maxLanes: number }>;
     const allowed = new Set(selectedMembers);
@@ -981,15 +968,15 @@ export default function TimeDashboard({
               <p className="mt-3 text-sm text-slate-500">No ranking data yet.</p>
             ) : (
             <div className="mt-3 flex h-32 items-end gap-2">
-                {dailyRankingBars.slice(0, 8).map((row) => {
-                  const maxSeconds = dailyRankingBars[0]?.seconds ?? 0;
-                  const barHeight = maxSeconds > 0 ? Math.max(14, Math.round((row.seconds / maxSeconds) * 100)) : 14;
+                {teamRanking.slice(0, 8).map((row) => {
+                  const maxSeconds = teamRanking[0]?.rankedSeconds ?? 0;
+                  const barHeight = maxSeconds > 0 ? Math.max(14, Math.round((row.rankedSeconds / maxSeconds) * 100)) : 14;
                   return (
                     <div key={row.name} className="flex min-w-[64px] flex-1 flex-col items-center gap-1">
                       <div
                         className="w-full rounded-t-md bg-gradient-to-t from-[#0BA5E9] to-[#67D0F8]"
                         style={{ height: `${barHeight}%` }}
-                        title={`${row.name}: ${formatDuration(row.seconds)}`}
+                        title={`${row.name}: ${formatDuration(row.rankedSeconds)}`}
                       />
                       <p className="w-full truncate text-center text-[11px] font-semibold text-slate-700">{row.name}</p>
                     </div>
@@ -1247,64 +1234,6 @@ export default function TimeDashboard({
 
       {!loading && !error && (mode === "team" || mode === "all") && teamData && (
         <div className="space-y-4">
-          {mode === "team" && (
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h2 className="text-lg font-semibold text-slate-900">Team ranking</h2>
-                  <p className="text-sm text-slate-500">
-                    Closed-entry leaderboard. Project <span className="font-semibold">Non-Work-Task</span> is excluded.
-                  </p>
-                </div>
-              </div>
-              {teamRanking.length === 0 && (
-                <p className="mt-4 text-sm text-slate-500">No entries yet.</p>
-              )}
-              {teamRanking.length > 0 && (
-                <div className="mt-4 overflow-x-auto">
-                  <div className="min-w-[760px]">
-                    <div className="flex h-56 items-end gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
-                      {teamRanking.map((row, index) => {
-                        const topScore = teamRanking[0]?.rankedSeconds ?? 0;
-                        const barHeight = topScore > 0 ? Math.max(16, Math.round((row.rankedSeconds / topScore) * 140)) : 16;
-                        return (
-                          <div key={row.name} className="flex w-[90px] flex-col items-center gap-2">
-                            <p className="text-[11px] font-semibold text-slate-800">#{index + 1}</p>
-                            <div
-                              className="w-6 rounded-t-md bg-gradient-to-t from-sky-600 to-cyan-400"
-                              style={{ height: `${barHeight}px` }}
-                              title={`${row.name}: ${formatDuration(row.rankedSeconds)}`}
-                            />
-                            <Link
-                              href={getMemberPageHref(row.name, date)}
-                              className={`truncate text-center text-xs ${MEMBER_LINK_CLASS}`}
-                            >
-                              {row.name}
-                            </Link>
-                            <p className="text-center text-[11px] text-slate-600">{formatDuration(row.rankedSeconds)}</p>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <div className="mt-3 grid gap-2 md:grid-cols-2">
-                      {teamRanking.map((row) => (
-                        <p key={`${row.name}-meta`} className="text-xs text-slate-600">
-                          <Link
-                            href={getMemberPageHref(row.name, date)}
-                            className={MEMBER_LINK_CLASS}
-                          >
-                            {row.name}
-                          </Link>
-                          : Start {formatTime(row.firstStart)} | End {formatTime(row.lastEnd)} | Longest break {formatDuration(row.longestBreakSeconds)} | {row.entryCount} entries
-                        </p>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
           {mode === "all" && (
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <h2 className="text-lg font-semibold text-slate-900">Member task cards</h2>
