@@ -453,6 +453,7 @@ export default function TimeDashboard({
   const dayCalendarScrollRef = useRef<HTMLDivElement | null>(null);
   const allCalendarsScrollRef = useRef<HTMLDivElement | null>(null);
   const memberPickerRef = useRef<HTMLDivElement | null>(null);
+  const allCalendarsDatePickerRef = useRef<HTMLInputElement | null>(null);
 
   const hasMembers = members.length > 0;
   const isSelfOnly = Boolean(restrictToMember);
@@ -641,6 +642,17 @@ export default function TimeDashboard({
       active = false;
     };
   }, [mode, date, refreshTick]);
+
+  const openAllCalendarsDatePicker = () => {
+    const input = allCalendarsDatePickerRef.current;
+    if (!input) return;
+    if ("showPicker" in input && typeof input.showPicker === "function") {
+      input.showPicker();
+      return;
+    }
+    input.focus();
+    input.click();
+  };
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -1448,60 +1460,86 @@ export default function TimeDashboard({
             <p className="text-sm text-slate-500">
               One shared daily timeline for everyone. Matching vertical positions indicate overlap.
             </p>
-            <div className="mt-3 relative max-w-xs" ref={memberPickerRef}>
-              <button
-                type="button"
-                onClick={() => setMemberPickerOpen((open) => !open)}
-                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-left text-sm text-slate-900"
-              >
-                Visible calendars: {selectedMembers.length}
-              </button>
-              {memberPickerOpen && (
-                <div className="absolute z-40 mt-2 max-h-64 w-full overflow-auto rounded-xl border border-slate-200 bg-white p-2 shadow-xl">
-                  <div className="mb-2 flex items-center justify-between gap-2 px-1">
-                    <button
-                      type="button"
-                      className="text-xs font-semibold text-sky-700"
-                      onClick={() => setSelectedMembers(members.map((item) => item.name))}
-                    >
-                      Select all
-                    </button>
-                    {restrictToMember && (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <div className="relative w-full max-w-xs" ref={memberPickerRef}>
+                <button
+                  type="button"
+                  onClick={() => setMemberPickerOpen((open) => !open)}
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-left text-sm text-slate-900"
+                >
+                  Visible calendars: {selectedMembers.length}
+                </button>
+                {memberPickerOpen && (
+                  <div className="absolute z-40 mt-2 max-h-64 w-full overflow-auto rounded-xl border border-slate-200 bg-white p-2 shadow-xl">
+                    <div className="mb-2 flex items-center justify-between gap-2 px-1">
                       <button
                         type="button"
                         className="text-xs font-semibold text-sky-700"
-                        onClick={() => setSelectedMembers([restrictToMember])}
+                        onClick={() => setSelectedMembers(members.map((item) => item.name))}
                       >
-                        Only mine
+                        Select all
                       </button>
-                    )}
-                    <button
-                      type="button"
-                      className="text-xs font-semibold text-sky-700"
-                      onClick={() => setSelectedMembers([])}
-                    >
-                      Clear
-                    </button>
+                      {restrictToMember && (
+                        <button
+                          type="button"
+                          className="text-xs font-semibold text-sky-700"
+                          onClick={() => setSelectedMembers([restrictToMember])}
+                        >
+                          Only mine
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="text-xs font-semibold text-sky-700"
+                        onClick={() => setSelectedMembers([])}
+                      >
+                        Clear
+                      </button>
+                    </div>
+                    {members.map((item) => {
+                      const checked = selectedMembers.includes(item.name);
+                      return (
+                        <label key={item.name} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() =>
+                              setSelectedMembers((prev) =>
+                                prev.includes(item.name) ? prev.filter((name) => name !== item.name) : [...prev, item.name]
+                              )
+                            }
+                          />
+                          <span className="text-sm text-slate-700">{item.name}</span>
+                        </label>
+                      );
+                    })}
                   </div>
-                  {members.map((item) => {
-                    const checked = selectedMembers.includes(item.name);
-                    return (
-                      <label key={item.name} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50">
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() =>
-                            setSelectedMembers((prev) =>
-                              prev.includes(item.name) ? prev.filter((name) => name !== item.name) : [...prev, item.name]
-                            )
-                          }
-                        />
-                        <span className="text-sm text-slate-700">{item.name}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              )}
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setDate(formatDateInput(new Date()))}
+                className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Today
+              </button>
+              <button
+                type="button"
+                onClick={openAllCalendarsDatePicker}
+                className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                title="Choose date"
+              >
+                {formatShortDateLabel(date)}
+              </button>
+              <input
+                ref={allCalendarsDatePickerRef}
+                type="date"
+                value={date}
+                onChange={(event) => setDate(event.target.value)}
+                className="sr-only"
+                tabIndex={-1}
+                aria-hidden="true"
+              />
             </div>
             <div ref={allCalendarsScrollRef} className="mt-4 max-h-[72vh] overflow-auto">
               <div className="grid min-w-[760px] grid-cols-[3.5rem_1fr] gap-2">

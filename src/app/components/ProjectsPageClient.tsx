@@ -73,7 +73,7 @@ function ProjectModal({
           <label className="block">
             <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">Project name</span>
             <div className="flex items-center gap-3">
-              <span className="inline-block h-7 w-7 rounded-full" style={{ backgroundColor: state.color }} />
+              <span className="inline-block h-7 w-7 rounded-full" style={{ backgroundColor: selectedColor }} />
               <input
                 type="text"
                 value={state.name}
@@ -123,7 +123,12 @@ function ProjectModal({
 }
 
 export default function ProjectsPageClient({ initialProjects }: { initialProjects: Project[] }) {
-  const [projects, setProjects] = useState(initialProjects);
+  const [projects, setProjects] = useState(
+    initialProjects.map((project) => ({
+      ...project,
+      color: normalizeColor(project.color),
+    }))
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<EditModalState | null>(null);
@@ -179,11 +184,11 @@ export default function ProjectsPageClient({ initialProjects }: { initialProject
               <tr
                 key={project.key}
                 className="cursor-pointer border-b border-slate-100 hover:bg-slate-50"
-                onClick={() => setEditing({ key: project.key, name: project.name, color: project.color || DEFAULT_PROJECT_COLOR })}
+                onClick={() => setEditing({ key: project.key, name: project.name, color: normalizeColor(project.color || DEFAULT_PROJECT_COLOR) })}
               >
                 <td className="px-6 py-3">
                   <div className="inline-flex items-center gap-2 text-base font-medium text-slate-900">
-                    <span className="inline-block h-3.5 w-3.5 rounded-full" style={{ backgroundColor: project.color }} />
+                    <span className="inline-block h-3.5 w-3.5 rounded-full" style={{ backgroundColor: normalizeColor(project.color) }} />
                     
                     {project.name}
                   </div>
@@ -195,7 +200,7 @@ export default function ProjectsPageClient({ initialProjects }: { initialProject
                     type="button"
                     onClick={(event) => {
                       event.stopPropagation();
-                      setEditing({ key: project.key, name: project.name, color: project.color || DEFAULT_PROJECT_COLOR });
+                      setEditing({ key: project.key, name: project.name, color: normalizeColor(project.color || DEFAULT_PROJECT_COLOR) });
                     }}
                     aria-label={`Edit ${project.name}`}
                     className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100"
@@ -234,7 +239,7 @@ export default function ProjectsPageClient({ initialProjects }: { initialProject
               const res = await fetch("/api/projects", {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ key: editing.key, name: editing.name, color: editing.color }),
+                body: JSON.stringify({ key: editing.key, name: editing.name, color: normalizeColor(editing.color) }),
               });
               const data = (await res.json()) as {
                 error?: string;
@@ -244,7 +249,9 @@ export default function ProjectsPageClient({ initialProjects }: { initialProject
               if (data.project) {
                 setProjects((prev) =>
                   prev.map((project) =>
-                    project.key === data.project!.key ? { ...project, name: data.project!.name, color: data.project!.color } : project
+                    project.key === data.project!.key
+                      ? { ...project, name: data.project!.name, color: normalizeColor(data.project!.color) }
+                      : project
                   )
                 );
               }
@@ -276,12 +283,15 @@ export default function ProjectsPageClient({ initialProjects }: { initialProject
               const res = await fetch("/api/projects", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ name: creating.name, color: creating.color }),
+                body: JSON.stringify({ name: creating.name, color: normalizeColor(creating.color) }),
               });
               const data = (await res.json()) as { error?: string; project?: Project };
               if (!res.ok || data.error) throw new Error(data.error || "Failed to create project");
               if (data.project) {
-                setProjects((prev) => [...prev.filter((p) => p.key !== data.project!.key), data.project!]);
+                setProjects((prev) => [
+                  ...prev.filter((p) => p.key !== data.project!.key),
+                  { ...data.project!, color: normalizeColor(data.project!.color) },
+                ]);
               }
               setCreating(null);
             } catch (err) {
