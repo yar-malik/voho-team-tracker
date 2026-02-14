@@ -179,6 +179,7 @@ type TaskProjectSummaryRow = {
 
 
 type EntryModalData = {
+  entryId: number;
   memberName: string;
   description: string;
   project: string;
@@ -309,6 +310,23 @@ function formatShortDateLabel(dateInput: string): string {
   return date.toLocaleDateString([], { weekday: "short", month: "numeric", day: "numeric" });
 }
 
+function formatTimeInputLocal(iso: string | null): string {
+  if (!iso) return "";
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return "";
+  const hh = String(parsed.getHours()).padStart(2, "0");
+  const mm = String(parsed.getMinutes()).padStart(2, "0");
+  return `${hh}:${mm}`;
+}
+
+function buildIsoFromDateAndTime(dateInput: string, timeInput: string): string | null {
+  if (!/^\d{2}:\d{2}$/.test(timeInput)) return null;
+  const [hour, minute] = timeInput.split(":").map(Number);
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null;
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+  return new Date(`${dateInput}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00`).toISOString();
+}
+
 function getMemberPageHref(memberName: string, date: string) {
   return `/member/${encodeURIComponent(memberName)}?date=${encodeURIComponent(date)}`;
 }
@@ -408,6 +426,14 @@ export default function TimeDashboard({
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<"member" | "team" | "all">("all");
   const [selectedEntry, setSelectedEntry] = useState<EntryModalData | null>(null);
+  const [entryEditor, setEntryEditor] = useState<{
+    description: string;
+    project: string;
+    startTime: string;
+    stopTime: string;
+    saving: boolean;
+    error: string | null;
+  } | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
   const [lastUpdateMeta, setLastUpdateMeta] = useState<{
     at: string;
@@ -416,8 +442,11 @@ export default function TimeDashboard({
   const [hoverTooltip, setHoverTooltip] = useState<HoverTooltipState | null>(null);
   const [relativeNowMs, setRelativeNowMs] = useState(Date.now());
   const [lastStoppedAtByMember, setLastStoppedAtByMember] = useState<Record<string, number>>({});
+  const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
+  const [memberPickerOpen, setMemberPickerOpen] = useState(false);
   const dayCalendarScrollRef = useRef<HTMLDivElement | null>(null);
   const allCalendarsScrollRef = useRef<HTMLDivElement | null>(null);
+  const memberPickerRef = useRef<HTMLDivElement | null>(null);
 
   const hasMembers = members.length > 0;
   const isSelfOnly = Boolean(restrictToMember);
@@ -440,6 +469,35 @@ export default function TimeDashboard({
       setMode(selfMode === "all" ? "all" : "member");
     }
   }, [restrictToMember, members, selfMode]);
+
+  useEffect(() => {
+    if (isSelfOnly && restrictToMember) {
+      setSelectedMembers([restrictToMember]);
+      return;
+    }
+    setSelectedMembers((prev) => {
+      if (prev.length > 0) return prev.filter((name) => members.some((item) => item.name === name));
+      return members.map((item) => item.name);
+    });
+  }, [members, isSelfOnly, restrictToMember]);
+
+  useEffect(() => {
+    if (!memberPickerOpen) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (!memberPickerRef.current) return;
+      if (memberPickerRef.current.contains(event.target as Node)) return;
+      setMemberPickerOpen(false);
+    };
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMemberPickerOpen(false);
+    };
+    window.addEventListener("mousedown", onPointerDown);
+    window.addEventListener("keydown", onEscape);
+    return () => {
+      window.removeEventListener("mousedown", onPointerDown);
+      window.removeEventListener("keydown", onEscape);
+    };
+  }, [memberPickerOpen]);
 
   useEffect(() => {
     setMode(sanitizeMode(initialMode));
@@ -649,12 +707,15 @@ export default function TimeDashboard({
     };
 
     const onFocusRefresh = () => setRefreshTick((value) => value + 1);
+    const onEntriesChanged = () => setRefreshTick((value) => value + 1);
 
     window.addEventListener("focus", onFocusRefresh);
     window.addEventListener("voho-timer-changed", onTimerChanged as EventListener);
+    window.addEventListener("voho-entries-changed", onEntriesChanged as EventListener);
     return () => {
       window.removeEventListener("focus", onFocusRefresh);
       window.removeEventListener("voho-timer-changed", onTimerChanged as EventListener);
+      window.removeEventListener("voho-entries-changed", onEntriesChanged as EventListener);
     };
   }, []);
 
@@ -682,23 +743,39 @@ export default function TimeDashboard({
 
   const teamRanking = useMemo(() => {
     if (!teamData) return [] as TeamRankingRow[];
-    return buildTeamRanking(teamData.members);
-  }, [teamData]);
+    const allowed = new Set(selectedMembers);
+    return buildTeamRanking(teamData.members.filter((item) => allowed.has(item.name)));
+  }, [teamData, selectedMembers]);
 
   const teamTimeline = useMemo(() => {
     if (!teamData) return [] as Array<{ name: string; blocks: TimelineBlock[]; maxLanes: number }>;
-    const orderedMembers = [...teamData.members].sort((a, b) => {
+    const allowed = new Set(selectedMembers);
+    const orderedMembers = [...teamData.members]
+      .filter((item) => allowed.has(item.name))
+      .sort((a, b) => {
       const aIsYar = a.name.trim().toLowerCase() === "yar";
       const bIsYar = b.name.trim().toLowerCase() === "yar";
       if (aIsYar && !bIsYar) return -1;
       if (!aIsYar && bIsYar) return 1;
       return a.name.localeCompare(b.name);
-    });
+      });
     return orderedMembers.map((memberData) => ({
       name: memberData.name,
       ...buildTimelineBlocks(memberData.entries, date),
     }));
-  }, [teamData, date]);
+  }, [teamData, date, selectedMembers]);
+
+  const filteredTeamMembers = useMemo(() => {
+    if (!teamData) return [] as TeamMemberData[];
+    const allowed = new Set(selectedMembers);
+    return teamData.members.filter((item) => allowed.has(item.name));
+  }, [teamData, selectedMembers]);
+
+  const filteredTeamWeekRows = useMemo(() => {
+    if (!teamWeekData) return [] as TeamWeekResponse["members"];
+    const allowed = new Set(selectedMembers);
+    return teamWeekData.members.filter((item) => allowed.has(item.name));
+  }, [teamWeekData, selectedMembers]);
 
   const memberWeekSeries = useMemo(() => {
     if (!teamWeekData || !member) return [] as Array<{ date: string; seconds: number }>;
@@ -732,12 +809,21 @@ export default function TimeDashboard({
 
   const openEntryModal = (entry: TimeEntry, memberName: string) => {
     setSelectedEntry({
+      entryId: entry.id,
       memberName,
       description: entry.description?.trim() || "(No description)",
       project: entry.project_name?.trim() || "No project",
       start: entry.start,
       end: entry.stop,
       durationSeconds: getEntrySeconds(entry),
+    });
+    setEntryEditor({
+      description: entry.description?.trim() || "",
+      project: entry.project_name?.trim() || "",
+      startTime: formatTimeInputLocal(entry.start),
+      stopTime: formatTimeInputLocal(entry.stop),
+      saving: false,
+      error: null,
     });
   };
 
@@ -856,7 +942,7 @@ export default function TimeDashboard({
             )}
           </div>
         ) : (
-          <p className="text-sm font-semibold text-slate-700">Your report dashboard</p>
+          <p className="text-sm font-semibold text-slate-700">Your calendar dashboard</p>
         )}
         <p className="text-xs text-slate-500">
           Last updated: {lastUpdateMeta ? `${formatDateTime(lastUpdateMeta.at)} (DB snapshot)` : "—"}
@@ -903,6 +989,57 @@ export default function TimeDashboard({
             onChange={(event) => setDate(event.target.value)}
           />
         </div>
+        {(mode === "all" || mode === "team") && (
+          <div className="md:col-span-2">
+            <label className="text-sm font-medium text-slate-600">Visible calendars</label>
+            <div className="mt-2 relative" ref={memberPickerRef}>
+              <button
+                type="button"
+                onClick={() => setMemberPickerOpen((open) => !open)}
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-left text-sm text-slate-900"
+              >
+                {selectedMembers.length} selected
+              </button>
+              {memberPickerOpen && (
+                <div className="absolute z-40 mt-2 max-h-64 w-full overflow-auto rounded-xl border border-slate-200 bg-white p-2 shadow-xl">
+                  <div className="mb-2 flex items-center justify-between gap-2 px-1">
+                    <button
+                      type="button"
+                      className="text-xs font-semibold text-sky-700"
+                      onClick={() => setSelectedMembers(members.map((item) => item.name))}
+                    >
+                      Select all
+                    </button>
+                    <button
+                      type="button"
+                      className="text-xs font-semibold text-sky-700"
+                      onClick={() => setSelectedMembers([])}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  {members.map((item) => {
+                    const checked = selectedMembers.includes(item.name);
+                    return (
+                      <label key={item.name} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() =>
+                            setSelectedMembers((prev) =>
+                              prev.includes(item.name) ? prev.filter((name) => name !== item.name) : [...prev, item.name]
+                            )
+                          }
+                        />
+                        <span className="text-sm text-slate-700">{item.name}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
         {mode === "member" && (
           <div className="flex flex-col justify-between rounded-xl border border-slate-200 bg-white px-4 py-3">
             <span className="text-xs uppercase tracking-wide text-slate-500">Total logged</span>
@@ -1216,7 +1353,7 @@ export default function TimeDashboard({
                 Compact per-member task split for the selected day.
               </p>
               <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {[...teamData.members]
+                {[...filteredTeamMembers]
                   .sort((a, b) => {
                     const aIsYar = a.name.trim().toLowerCase() === "yar";
                     const bIsYar = b.name.trim().toLowerCase() === "yar";
@@ -1339,7 +1476,7 @@ export default function TimeDashboard({
                     </tr>
                   </thead>
                   <tbody>
-                    {teamWeekData.members.map((row, index) => (
+                    {filteredTeamWeekRows.map((row, index) => (
                       <tr key={row.name} className="border-b border-slate-100">
                         <td className="px-2 py-2 font-semibold text-slate-900">{index + 1}</td>
                         <td className="px-2 py-2 text-slate-800">
@@ -1424,7 +1561,7 @@ export default function TimeDashboard({
                         ))}
 
                         {memberTimeline.blocks.map((block) => {
-                          const sourceEntry = teamData.members
+                          const sourceEntry = filteredTeamMembers
                             .find((item) => item.name === memberTimeline.name)
                             ?.entries.find(
                               (entry) => `${entry.id}-${new Date(entry.start).getTime()}` === block.id
@@ -1487,7 +1624,10 @@ export default function TimeDashboard({
       {selectedEntry && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-4"
-          onClick={() => setSelectedEntry(null)}
+          onClick={() => {
+            setSelectedEntry(null);
+            setEntryEditor(null);
+          }}
         >
           <div
             className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl"
@@ -1501,7 +1641,10 @@ export default function TimeDashboard({
               <button
                 type="button"
                 className="rounded-full border border-slate-200 px-3 py-1 text-sm text-slate-600"
-                onClick={() => setSelectedEntry(null)}
+                onClick={() => {
+                  setSelectedEntry(null);
+                  setEntryEditor(null);
+                }}
               >
                 x
               </button>
@@ -1527,6 +1670,97 @@ export default function TimeDashboard({
                 {formatDuration(selectedEntry.durationSeconds)}
               </p>
             </div>
+            {entryEditor && (
+              <div className="mt-4 space-y-2 border-t border-slate-200 pt-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Edit entry</p>
+                <input
+                  type="text"
+                  value={entryEditor.description}
+                  onChange={(event) =>
+                    setEntryEditor((prev) => (prev ? { ...prev, description: event.target.value, error: null } : prev))
+                  }
+                  placeholder="Description"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                />
+                <input
+                  type="text"
+                  value={entryEditor.project}
+                  onChange={(event) =>
+                    setEntryEditor((prev) => (prev ? { ...prev, project: event.target.value, error: null } : prev))
+                  }
+                  placeholder="Project"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="time"
+                    value={entryEditor.startTime}
+                    onChange={(event) =>
+                      setEntryEditor((prev) => (prev ? { ...prev, startTime: event.target.value, error: null } : prev))
+                    }
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  />
+                  <input
+                    type="time"
+                    value={entryEditor.stopTime}
+                    onChange={(event) =>
+                      setEntryEditor((prev) => (prev ? { ...prev, stopTime: event.target.value, error: null } : prev))
+                    }
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  />
+                </div>
+                {entryEditor.error && <p className="text-xs text-rose-600">{entryEditor.error}</p>}
+                <button
+                  type="button"
+                  disabled={entryEditor.saving}
+                  onClick={async () => {
+                    if (!selectedEntry) return;
+                    const startIso = buildIsoFromDateAndTime(date, entryEditor.startTime);
+                    const stopIso = buildIsoFromDateAndTime(date, entryEditor.stopTime);
+                    if (!startIso || !stopIso || new Date(stopIso).getTime() <= new Date(startIso).getTime()) {
+                      setEntryEditor((prev) =>
+                        prev ? { ...prev, error: "Choose a valid start and end time (end must be after start)." } : prev
+                      );
+                      return;
+                    }
+                    setEntryEditor((prev) => (prev ? { ...prev, saving: true, error: null } : prev));
+                    try {
+                      const res = await fetch("/api/time-entries/update", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          member: selectedEntry.memberName,
+                          entryId: selectedEntry.entryId,
+                          description: entryEditor.description,
+                          project: entryEditor.project,
+                          startAt: startIso,
+                          stopAt: stopIso,
+                          tzOffset: new Date().getTimezoneOffset(),
+                        }),
+                      });
+                      const payload = (await res.json()) as { error?: string };
+                      if (!res.ok || payload.error) {
+                        setEntryEditor((prev) =>
+                          prev ? { ...prev, saving: false, error: payload.error || "Failed to update entry." } : prev
+                        );
+                        return;
+                      }
+                      setSelectedEntry(null);
+                      setEntryEditor(null);
+                      setRefreshTick((value) => value + 1);
+                      window.dispatchEvent(
+                        new CustomEvent("voho-entries-changed", { detail: { memberName: selectedEntry.memberName } })
+                      );
+                    } catch {
+                      setEntryEditor((prev) => (prev ? { ...prev, saving: false, error: "Failed to update entry." } : prev));
+                    }
+                  }}
+                  className="w-full rounded-lg bg-[#0BA5E9] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+                >
+                  {entryEditor.saving ? "Saving..." : "Save changes"}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -58,15 +58,6 @@ function ReportsIcon({ className }: IconProps) {
   );
 }
 
-function CalendarIcon({ className }: IconProps) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={className} aria-hidden="true">
-      <rect x="3.5" y="5" width="17" height="15" rx="2.5" />
-      <path d="M7.5 3.5v3M16.5 3.5v3M3.5 9.5h17" strokeLinecap="round" />
-    </svg>
-  );
-}
-
 function TeamIcon({ className }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
@@ -345,12 +336,6 @@ export default function PlatformShell({
             <div>
               <p className="px-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Analyze</p>
               <div className="mt-2 space-y-1.5">
-                <Link href="/all-calendars" prefetch className={navClass(isActive(pathname, "/all-calendars"))}>
-                  <span className="inline-flex items-center gap-2">
-                    <CalendarIcon className={iconClass()} />
-                    <span>All calendars</span>
-                  </span>
-                </Link>
                 <Link href="/reports" prefetch className={navClass(isActive(pathname, "/reports"))}>
                   <span className="inline-flex items-center gap-2">
                     <ReportsIcon className={iconClass()} />

@@ -32,6 +32,37 @@ function formatTimer(totalSeconds: number): string {
   return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
+function parseDurationMinutes(input: string): number | null {
+  const raw = input.trim().toLowerCase();
+  if (!raw) return null;
+
+  if (/^\d+:\d{1,2}$/.test(raw)) {
+    const [hours, minutes] = raw.split(":").map(Number);
+    if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+    return Math.max(1, Math.round(hours * 60 + minutes));
+  }
+
+  if (/^\d+(\.\d+)?$/.test(raw)) {
+    return Math.max(1, Math.round(Number(raw)));
+  }
+
+  const regex = /(\d+(?:\.\d+)?)\s*(hours?|hrs?|hr|h|minutes?|mins?|min|m)\b/g;
+  let match: RegExpExecArray | null = null;
+  let totalMinutes = 0;
+  while ((match = regex.exec(raw)) !== null) {
+    const value = Number(match[1]);
+    const unit = match[2];
+    if (!Number.isFinite(value)) continue;
+    if (unit.startsWith("h")) {
+      totalMinutes += value * 60;
+    } else {
+      totalMinutes += value;
+    }
+  }
+  if (totalMinutes > 0) return Math.max(1, Math.round(totalMinutes));
+  return null;
+}
+
 export default function GlobalTimerBar({ memberName }: { memberName: string | null }) {
   const [current, setCurrent] = useState<RunningTimer | null>(null);
   const [projects, setProjects] = useState<ProjectItem[]>([]);
@@ -39,6 +70,8 @@ export default function GlobalTimerBar({ memberName }: { memberName: string | nu
   const [projectName, setProjectName] = useState("");
   const [nowMs, setNowMs] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [quickDuration, setQuickDuration] = useState("");
+  const [quickDurationError, setQuickDurationError] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerSearch, setPickerSearch] = useState("");
   const pickerRef = useRef<HTMLDivElement | null>(null);
@@ -246,6 +279,44 @@ export default function GlobalTimerBar({ memberName }: { memberName: string | nu
     return sorted.filter((project) => project.name.toLowerCase().includes(query));
   }, [projects, pickerSearch]);
 
+  const createDurationEntry = useCallback(async () => {
+    if (!memberName || current) return;
+    const durationMinutes = parseDurationMinutes(quickDuration);
+    if (!durationMinutes) {
+      setQuickDurationError("Use a format like 25 min or 1 hour");
+      return;
+    }
+
+    setQuickDurationError(null);
+    setBusy(true);
+    try {
+      const startAtIso = new Date(Date.now() - durationMinutes * 60 * 1000).toISOString();
+      const res = await fetch("/api/time-entries/manual", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          member: memberName,
+          description,
+          project: projectName,
+          startAt: startAtIso,
+          durationMinutes,
+          tzOffset: new Date().getTimezoneOffset(),
+        }),
+      });
+      if (!res.ok) {
+        const payload = (await res.json()) as { error?: string };
+        setQuickDurationError(payload.error || "Failed to add duration entry");
+        return;
+      }
+      setQuickDuration("");
+      window.dispatchEvent(new CustomEvent("voho-entries-changed", { detail: { memberName } }));
+    } catch {
+      setQuickDurationError("Failed to add duration entry");
+    } finally {
+      setBusy(false);
+    }
+  }, [memberName, current, quickDuration, description, projectName]);
+
   if (!memberName) return null;
 
   return (
@@ -325,6 +396,27 @@ export default function GlobalTimerBar({ memberName }: { memberName: string | nu
         </div>
 
         <p className="min-w-[95px] text-right text-3xl font-semibold tabular-nums text-slate-900">{formatTimer(runningSeconds)}</p>
+
+        <div className="flex min-w-[170px] flex-col gap-1">
+          <input
+            type="text"
+            value={quickDuration}
+            onChange={(event) => {
+              setQuickDuration(event.target.value);
+              if (quickDurationError) setQuickDurationError(null);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                void createDurationEntry();
+              }
+            }}
+            placeholder="25 min / 1 hour"
+            disabled={Boolean(current) || busy}
+            className="h-11 rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-700 outline-none focus:border-sky-400 disabled:cursor-not-allowed disabled:bg-slate-100"
+          />
+          {quickDurationError && <p className="text-[11px] text-rose-600">{quickDurationError}</p>}
+        </div>
 
         <button
           type="button"
