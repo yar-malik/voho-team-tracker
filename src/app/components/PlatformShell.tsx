@@ -147,6 +147,7 @@ export default function PlatformShell({
   const pathname = usePathname();
   const [timerStartAt, setTimerStartAt] = useState<string | null>(null);
   const [fallbackDurationSeconds, setFallbackDurationSeconds] = useState(0);
+  const [currentTaskLabel, setCurrentTaskLabel] = useState<string>("");
   const [nowMs, setNowMs] = useState(0);
   const defaultTitleRef = useRef("Voho Track");
 
@@ -172,12 +173,14 @@ export default function PlatformShell({
           { cache: "no-store" }
         );
         const currentData = (await currentResponse.json()) as {
-          current?: { startAt: string; durationSeconds: number } | null;
+          current?: { startAt: string; durationSeconds: number; description?: string | null; projectName?: string | null } | null;
           error?: string;
         };
         if (!currentResponse.ok || currentData.error || !active) return;
         setTimerStartAt(currentData.current?.startAt ?? null);
         setFallbackDurationSeconds(currentData.current?.durationSeconds ?? 0);
+        const nextTaskLabel = (currentData.current?.description?.trim() || currentData.current?.projectName?.trim() || "").trim();
+        setCurrentTaskLabel(nextTaskLabel);
       } catch {
         // Keep last known timer state on polling errors.
       }
@@ -189,6 +192,8 @@ export default function PlatformShell({
         isRunning?: boolean;
         startAt?: string | null;
         durationSeconds?: number;
+        description?: string | null;
+        projectName?: string | null;
       }>;
       const detail = custom.detail;
       if (!detail) return;
@@ -197,9 +202,11 @@ export default function PlatformShell({
       if (detail.isRunning) {
         setTimerStartAt(detail.startAt ?? new Date().toISOString());
         setFallbackDurationSeconds(Math.max(0, detail.durationSeconds ?? 0));
+        setCurrentTaskLabel((prev) => (detail.description?.trim() || detail.projectName?.trim() || prev).trim());
       } else {
         setTimerStartAt(null);
         setFallbackDurationSeconds(0);
+        setCurrentTaskLabel("");
       }
     };
 
@@ -231,9 +238,9 @@ export default function PlatformShell({
       setFaviconHref("/favicon-idle.svg");
       return;
     }
-    document.title = `${runningLabel} • ${defaultTitleRef.current}`;
+    document.title = currentTaskLabel ? `${currentTaskLabel} • ${runningLabel}` : runningLabel;
     setFaviconHref("/favicon-running.svg");
-  }, [isRunning, runningLabel]);
+  }, [isRunning, runningLabel, currentTaskLabel]);
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#f7fcff_0%,#f8fbff_100%)]">

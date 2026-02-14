@@ -17,6 +17,11 @@ type ProjectItem = {
   color?: string | null;
 };
 
+type PendingDraft = {
+  description: string;
+  projectName: string;
+};
+
 function formatTimer(totalSeconds: number): string {
   const safe = Math.max(0, Math.floor(totalSeconds));
   const h = Math.floor(safe / 3600);
@@ -37,6 +42,7 @@ export default function GlobalTimerBar({ memberName }: { memberName: string | nu
   const pickerRef = useRef<HTMLDivElement | null>(null);
   const latestDraftRef = useRef({ description: "", projectName: "" });
   const saveControllerRef = useRef<AbortController | null>(null);
+  const failedDraftRef = useRef<PendingDraft | null>(null);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNowMs(Date.now()), 1000);
@@ -98,9 +104,13 @@ export default function GlobalTimerBar({ memberName }: { memberName: string | nu
           keepalive,
           cache: "no-store",
         });
-        if (!response.ok) return;
+        if (!response.ok) {
+          failedDraftRef.current = { description: nextDescription, projectName: nextProjectName };
+          return;
+        }
         const payload = (await response.json()) as { current?: RunningTimer | null };
         if (payload.current) {
+          failedDraftRef.current = null;
           setCurrent(payload.current);
           window.dispatchEvent(
             new CustomEvent("voho-timer-changed", {
@@ -117,6 +127,7 @@ export default function GlobalTimerBar({ memberName }: { memberName: string | nu
         }
       } catch (error) {
         if (error instanceof Error && error.name === "AbortError") return;
+        failedDraftRef.current = { description: nextDescription, projectName: nextProjectName };
         // Best-effort.
       } finally {
         if (!keepalive && controller && saveControllerRef.current === controller) {
@@ -140,6 +151,21 @@ export default function GlobalTimerBar({ memberName }: { memberName: string | nu
   useEffect(() => {
     return () => saveControllerRef.current?.abort();
   }, []);
+
+  useEffect(() => {
+    if (current) return;
+    failedDraftRef.current = null;
+  }, [current]);
+
+  useEffect(() => {
+    if (!current || !memberName) return;
+    const retryId = window.setInterval(() => {
+      const pending = failedDraftRef.current;
+      if (!pending) return;
+      void persistRunningDraft(pending.description, pending.projectName);
+    }, 3000);
+    return () => window.clearInterval(retryId);
+  }, [current, memberName, persistRunningDraft]);
 
   useEffect(() => {
     if (!pickerOpen) return;
