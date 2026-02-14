@@ -895,14 +895,23 @@ export default function TimeDashboard({
   }, [teamData]);
 
   const dailyRankingSeries = useMemo(() => {
-    if (!teamData) return [] as Array<{ name: string; seconds: number }>;
-    return [...teamData.members]
-      .map((item) => ({ name: item.name, seconds: Math.max(0, item.totalSeconds) }))
-      .sort((a, b) => {
-        if (b.seconds !== a.seconds) return b.seconds - a.seconds;
-        return a.name.localeCompare(b.name);
-      });
-  }, [teamData]);
+    const totals = new Map<string, number>();
+    for (const item of teamData?.members ?? []) {
+      totals.set(item.name.toLowerCase(), Math.max(0, item.totalSeconds));
+    }
+    const rows = members.map((item) => ({
+      name: item.name,
+      seconds: totals.get(item.name.toLowerCase()) ?? 0,
+    }));
+    return rows.sort((a, b) => {
+      if (b.seconds !== a.seconds) return b.seconds - a.seconds;
+      const aIsYar = a.name.trim().toLowerCase() === "yar";
+      const bIsYar = b.name.trim().toLowerCase() === "yar";
+      if (aIsYar && !bIsYar) return -1;
+      if (!aIsYar && bIsYar) return 1;
+      return a.name.localeCompare(b.name);
+    });
+  }, [teamData, members]);
 
   const dailyRankingMaxHours = useMemo(() => {
     const maxSeconds = dailyRankingSeries.reduce((max, row) => Math.max(max, row.seconds), 0);
@@ -1374,7 +1383,10 @@ export default function TimeDashboard({
                           {sourceEntry?.stop !== null && (
                             <div
                               className="absolute inset-x-0 top-0 h-2 cursor-ns-resize"
-                              onMouseDown={(event) => startBlockDrag(event, "resize-start", sourceEntry, member)}
+                              onMouseDown={(event) => {
+                                if (!sourceEntry) return;
+                                startBlockDrag(event, "resize-start", sourceEntry, member);
+                              }}
                             />
                           )}
                           <div className="overflow-hidden">
@@ -1383,7 +1395,10 @@ export default function TimeDashboard({
                           {sourceEntry?.stop !== null && (
                             <div
                               className="absolute inset-x-0 bottom-0 h-2 cursor-ns-resize"
-                              onMouseDown={(event) => startBlockDrag(event, "resize-end", sourceEntry, member)}
+                              onMouseDown={(event) => {
+                                if (!sourceEntry) return;
+                                startBlockDrag(event, "resize-end", sourceEntry, member);
+                              }}
                             />
                           )}
                         </div>
