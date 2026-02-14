@@ -117,6 +117,9 @@ function formatTimer(totalSeconds: number) {
   return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
+const SIDEBAR_POMODORO_SECONDS = 25 * 60;
+const SIDEBAR_POMODORO_STORAGE_KEY = "voho_sidebar_pomodoro_v1";
+
 function setFaviconHref(href: string, stateKey: "idle" | "running") {
   const withVersion = `${href}?state=${stateKey}&v=20260214`;
   const relTargets = ["icon", "shortcut icon", "apple-touch-icon"];
@@ -151,6 +154,8 @@ export default function PlatformShell({
   const [currentTaskLabel, setCurrentTaskLabel] = useState<string>("");
   const [nowMs, setNowMs] = useState(0);
   const defaultTitleRef = useRef("Voho Track");
+  const [pomodoroSecondsLeft, setPomodoroSecondsLeft] = useState(SIDEBAR_POMODORO_SECONDS);
+  const [pomodoroRunning, setPomodoroRunning] = useState(false);
 
   useEffect(() => {
     defaultTitleRef.current = document.title || "Voho Track";
@@ -160,6 +165,58 @@ export default function PlatformShell({
     const timer = window.setInterval(() => setNowMs(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(SIDEBAR_POMODORO_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as {
+        secondsLeft?: number;
+        running?: boolean;
+        updatedAt?: number;
+      };
+      let seconds = Math.max(0, Math.min(SIDEBAR_POMODORO_SECONDS, Number(parsed.secondsLeft ?? SIDEBAR_POMODORO_SECONDS)));
+      const running = Boolean(parsed.running);
+      const updatedAt = Number(parsed.updatedAt ?? Date.now());
+      if (running) {
+        const elapsed = Math.max(0, Math.floor((Date.now() - updatedAt) / 1000));
+        seconds = Math.max(0, seconds - elapsed);
+      }
+      setPomodoroSecondsLeft(seconds);
+      setPomodoroRunning(running && seconds > 0);
+    } catch {
+      // Ignore invalid local state.
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        SIDEBAR_POMODORO_STORAGE_KEY,
+        JSON.stringify({
+          secondsLeft: pomodoroSecondsLeft,
+          running: pomodoroRunning,
+          updatedAt: Date.now(),
+        })
+      );
+    } catch {
+      // Ignore storage errors.
+    }
+  }, [pomodoroSecondsLeft, pomodoroRunning]);
+
+  useEffect(() => {
+    if (!pomodoroRunning) return;
+    const timer = window.setInterval(() => {
+      setPomodoroSecondsLeft((prev) => {
+        if (prev <= 1) {
+          setPomodoroRunning(false);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [pomodoroRunning]);
 
   useEffect(() => {
     let active = true;
@@ -325,6 +382,32 @@ export default function PlatformShell({
                     <span>KPIs</span>
                   </span>
                 </Link>
+                <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-sky-700">Timer</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (pomodoroSecondsLeft <= 0) setPomodoroSecondsLeft(SIDEBAR_POMODORO_SECONDS);
+                        setPomodoroRunning((running) => !running);
+                      }}
+                      aria-label={pomodoroRunning ? "Pause pomodoro timer" : "Start pomodoro timer"}
+                      className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#0BA5E9] text-white hover:bg-[#0994cf]"
+                    >
+                      {pomodoroRunning ? (
+                        <span className="flex items-center gap-[2px]">
+                          <span className="h-2.5 w-0.5 rounded bg-white" />
+                          <span className="h-2.5 w-0.5 rounded bg-white" />
+                        </span>
+                      ) : (
+                        <span className="ml-[1px] h-0 w-0 border-y-[5px] border-y-transparent border-l-[7px] border-l-white" />
+                      )}
+                    </button>
+                  </div>
+                  <p className="mt-1 text-sm font-semibold tabular-nums text-slate-800">
+                    timer is {formatTimer(pomodoroSecondsLeft)}
+                  </p>
+                </div>
               </div>
             </div>
           </nav>
