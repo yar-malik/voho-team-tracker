@@ -469,7 +469,7 @@ export default function TimeDashboard({
   }, [restrictToMember, members, selfMode]);
 
   useEffect(() => {
-    if (isSelfOnly && restrictToMember) {
+    if (isSelfOnly && restrictToMember && selfMode === "member") {
       setSelectedMembers([restrictToMember]);
       return;
     }
@@ -477,7 +477,7 @@ export default function TimeDashboard({
       if (prev.length > 0) return prev.filter((name) => members.some((item) => item.name === name));
       return members.map((item) => item.name);
     });
-  }, [members, isSelfOnly, restrictToMember]);
+  }, [members, isSelfOnly, restrictToMember, selfMode]);
 
   useEffect(() => {
     if (!memberPickerOpen) return;
@@ -1481,6 +1481,15 @@ export default function TimeDashboard({
                     >
                       Select all
                     </button>
+                    {restrictToMember && (
+                      <button
+                        type="button"
+                        className="text-xs font-semibold text-sky-700"
+                        onClick={() => setSelectedMembers([restrictToMember])}
+                      >
+                        Only mine
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="text-xs font-semibold text-sky-700"
