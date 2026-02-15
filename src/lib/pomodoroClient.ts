@@ -285,6 +285,7 @@ export function updatePomodoroSession(
 export function addManualPomodoroSession(
   state: PomodoroState,
   input: {
+    startedAtIso?: string;
     endedAtIso: string;
     focus?: string;
     done?: string;
@@ -292,10 +293,16 @@ export function addManualPomodoroSession(
     durationSeconds?: number;
   }
 ): PomodoroState {
+  const startedAtInput = input.startedAtIso ? new Date(input.startedAtIso) : null;
   const endedAtDate = new Date(input.endedAtIso);
   const safeEndedAt = Number.isNaN(endedAtDate.getTime()) ? new Date() : endedAtDate;
-  const durationSeconds = Math.max(60, Math.floor(Number(input.durationSeconds ?? DEFAULT_POMODORO_SECONDS)));
-  const startedAt = new Date(safeEndedAt.getTime() - durationSeconds * 1000);
+  const fallbackDurationSeconds = Math.max(60, Math.floor(Number(input.durationSeconds ?? DEFAULT_POMODORO_SECONDS)));
+  const hasValidStartedAt = startedAtInput && !Number.isNaN(startedAtInput.getTime());
+  const startedAt =
+    hasValidStartedAt && startedAtInput!.getTime() < safeEndedAt.getTime()
+      ? startedAtInput!
+      : new Date(safeEndedAt.getTime() - fallbackDurationSeconds * 1000);
+  const durationSeconds = Math.max(60, Math.floor((safeEndedAt.getTime() - startedAt.getTime()) / 1000));
   const dayKey = getPomodoroDayKey(safeEndedAt);
   const nextSession: PomodoroSession = {
     id: `pomodoro-${safeEndedAt.getTime()}-${Math.random().toString(36).slice(2, 8)}`,

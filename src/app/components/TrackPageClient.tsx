@@ -247,7 +247,7 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [weekTotalSeconds, setWeekTotalSeconds] = useState(0);
   const [dailyRanking, setDailyRanking] = useState<Array<{ name: string; seconds: number }>>([]);
-  const [dailyRankingWarning, setDailyRankingWarning] = useState<string | null>(null);
+  const [teamHoursWarning, setTeamHoursWarning] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(0);
@@ -487,8 +487,8 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
           .map((member) => (member.name ?? member.member_name ?? "").trim())
           .filter((name) => name.length > 0)
           .map((name) => ({ name, seconds: 0 }));
-        setDailyRanking(normalizeAndSort(rows));
-        setDailyRankingWarning(warningMessage);
+          setDailyRanking(normalizeAndSort(rows));
+          setTeamHoursWarning(warningMessage);
       };
 
       try {
@@ -497,7 +497,7 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
           { cache: "no-store" }
         ).then(async (res) => {
           const data = (await res.json()) as DailyRankingResponse;
-          if (!res.ok || data.error) throw new Error(data.error || "Failed to load daily ranking");
+          if (!res.ok || data.error) throw new Error(data.error || "Failed to load team hours");
           return data;
         });
         if (!active) return;
@@ -511,14 +511,14 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
           return;
         }
         setDailyRanking(normalizeAndSort(rows));
-        setDailyRankingWarning(rankingData.warning ?? null);
+        setTeamHoursWarning(rankingData.warning ?? null);
       } catch {
         try {
           await loadMembersFallback("Team totals unavailable, showing members with 0h.");
         } catch {
           if (!active) return;
           setDailyRanking([]);
-          setDailyRankingWarning("Failed to load daily ranking.");
+          setTeamHoursWarning("Failed to load team hours.");
         }
       }
     };
@@ -653,12 +653,12 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
 
       <div className="border-b border-slate-200 bg-slate-50/40 px-5 py-4">
         <div className="mb-2 flex items-center justify-between">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Daily ranking</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Total hours worked by team member</p>
           <p className="text-xs text-slate-500">{date}</p>
         </div>
-        {dailyRankingWarning && <p className="mb-2 text-xs text-amber-700">{dailyRankingWarning}</p>}
+        {teamHoursWarning && <p className="mb-2 text-xs text-amber-700">{teamHoursWarning}</p>}
         {dailyRanking.length === 0 ? (
-          <p className="text-sm text-slate-500">No ranking data yet.</p>
+          <p className="text-sm text-slate-500">No team hours yet for this date.</p>
         ) : (
           <div className="grid grid-cols-[3.2rem_1fr] gap-2">
             <div className="relative h-40">
@@ -690,10 +690,11 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
                   return (
                     <div key={row.name} className="flex min-w-[56px] flex-1 flex-col items-center gap-1">
                       <div
-                        className="w-full rounded-t-md bg-gradient-to-t from-[#0BA5E9] to-[#67D0F8]"
+                        className="w-full rounded-t-md bg-gradient-to-t from-[#0284c7] via-[#0BA5E9] to-[#7dd3fc] shadow-[0_4px_10px_rgba(2,132,199,0.2)]"
                         style={{ height: `${heightPercent}%` }}
                         title={`${row.name}: ${formatDurationShort(row.seconds)}`}
                       />
+                      <p className="text-[10px] font-semibold text-slate-600">{hours.toFixed(1)}h</p>
                       <p className="w-full truncate text-center text-[11px] font-semibold text-slate-700">{row.name}</p>
                     </div>
                   );

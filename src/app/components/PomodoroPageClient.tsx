@@ -22,6 +22,46 @@ function formatDay(dayKey: string) {
   return date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
 }
 
+type ManualPomodoroDraft = {
+  id: string;
+  startTime: string;
+  endTime: string;
+  focus: string;
+  done: string;
+  interruptions: string;
+  error: string | null;
+};
+
+function toLocalTimeValue(date: Date) {
+  const hh = String(date.getHours()).padStart(2, "0");
+  const mm = String(date.getMinutes()).padStart(2, "0");
+  return `${hh}:${mm}`;
+}
+
+function buildTodayIso(timeValue: string) {
+  const now = new Date();
+  const [hRaw, mRaw] = timeValue.split(":");
+  const hours = Number(hRaw);
+  const minutes = Number(mRaw);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+  const date = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes, 0, 0);
+  return date.toISOString();
+}
+
+function createDraft(): ManualPomodoroDraft {
+  const now = new Date();
+  const start = new Date(now.getTime() - 25 * 60 * 1000);
+  return {
+    id: `manual-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    startTime: toLocalTimeValue(start),
+    endTime: toLocalTimeValue(now),
+    focus: "",
+    done: "",
+    interruptions: "0",
+    error: null,
+  };
+}
+
 export default function PomodoroPageClient() {
   const [pomodoroState, setPomodoroState] = useState<PomodoroState>({
     secondsLeft: 25 * 60,
@@ -31,20 +71,7 @@ export default function PomodoroPageClient() {
     activeSessionId: null,
     updatedAt: Date.now(),
   });
-  const [manualEndedAt, setManualEndedAt] = useState(() => {
-    const now = new Date();
-    const yyyy = now.getFullYear();
-    const mm = String(now.getMonth() + 1).padStart(2, "0");
-    const dd = String(now.getDate()).padStart(2, "0");
-    const hh = String(now.getHours()).padStart(2, "0");
-    const min = String(now.getMinutes()).padStart(2, "0");
-    return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
-  });
-  const [manualFocus, setManualFocus] = useState("");
-  const [manualDone, setManualDone] = useState("");
-  const [manualInterruptions, setManualInterruptions] = useState("0");
-  const [manualDurationMinutes, setManualDurationMinutes] = useState("25");
-  const [manualError, setManualError] = useState<string | null>(null);
+  const [manualDrafts, setManualDrafts] = useState<ManualPomodoroDraft[]>([]);
 
   useEffect(() => {
     const restored = readPomodoroState();
@@ -168,107 +195,172 @@ export default function PomodoroPageClient() {
       </div>
 
       <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50/70 p-4">
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Add Manual Pomodoro</p>
-        <div className="mt-3 grid gap-3 md:grid-cols-2">
-          <label className="text-sm text-slate-700">
-            Ended at
-            <input
-              type="datetime-local"
-              value={manualEndedAt}
-              onChange={(event) => setManualEndedAt(event.target.value)}
-              className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5"
-            />
-          </label>
-          <label className="text-sm text-slate-700">
-            Duration (minutes)
-            <input
-              type="number"
-              min={1}
-              value={manualDurationMinutes}
-              onChange={(event) => setManualDurationMinutes(event.target.value)}
-              className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5"
-            />
-          </label>
-          <label className="text-sm text-slate-700">
-            Focus
-            <input
-              type="text"
-              value={manualFocus}
-              onChange={(event) => setManualFocus(event.target.value)}
-              placeholder="What was your focus?"
-              className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5"
-            />
-          </label>
-          <label className="text-sm text-slate-700">
-            What was done
-            <input
-              type="text"
-              value={manualDone}
-              onChange={(event) => setManualDone(event.target.value)}
-              placeholder="What did you complete?"
-              className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5"
-            />
-          </label>
-          <label className="text-sm text-slate-700">
-            Interruptions
-            <input
-              type="number"
-              min={0}
-              value={manualInterruptions}
-              onChange={(event) => setManualInterruptions(event.target.value)}
-              className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5"
-            />
-          </label>
-        </div>
-        {manualError && <p className="mt-2 text-xs text-rose-600">{manualError}</p>}
-        <div className="mt-3">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Manual Pomodoros (today)</p>
           <button
             type="button"
-            onClick={() => {
-              const endedAtIso = new Date(manualEndedAt).toISOString();
-              const durationMinutes = Number(manualDurationMinutes);
-              const interruptions = Number(manualInterruptions);
-              if (!manualEndedAt || Number.isNaN(new Date(manualEndedAt).getTime())) {
-                setManualError("Please choose a valid end date/time.");
-                return;
-              }
-              if (!Number.isFinite(durationMinutes) || durationMinutes <= 0) {
-                setManualError("Duration must be greater than zero.");
-                return;
-              }
-              if (!Number.isFinite(interruptions) || interruptions < 0) {
-                setManualError("Interruptions must be 0 or more.");
-                return;
-              }
-              setManualError(null);
-              setPomodoroState((prev) => {
-                const next = addManualPomodoroSession(prev, {
-                  endedAtIso,
-                  durationSeconds: Math.round(durationMinutes * 60),
-                  focus: manualFocus,
-                  done: manualDone,
-                  interruptions,
-                });
-                writePomodoroState(next, "pomodoro-page");
-                return next;
-              });
-              setManualFocus("");
-              setManualDone("");
-              setManualInterruptions("0");
-              setManualDurationMinutes("25");
-            }}
-            className="rounded-lg bg-[#0BA5E9] px-4 py-2 text-sm font-semibold text-white hover:bg-[#0994cf]"
+            onClick={() => setManualDrafts((prev) => [createDraft(), ...prev])}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
           >
             Add manual pomodoro
           </button>
         </div>
+
+        {manualDrafts.length > 0 && (
+          <div className="mt-3 overflow-hidden rounded-lg border border-slate-200 bg-white">
+            <table className="min-w-full text-sm">
+              <thead className="bg-slate-50 text-left text-slate-600">
+                <tr>
+                  <th className="px-3 py-2">Start</th>
+                  <th className="px-3 py-2">End</th>
+                  <th className="px-3 py-2">Focus</th>
+                  <th className="px-3 py-2">What was done</th>
+                  <th className="px-3 py-2">Interruptions</th>
+                  <th className="px-3 py-2">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {manualDrafts.map((draft) => (
+                  <tr key={draft.id} className="border-t border-slate-100 align-top">
+                    <td className="px-3 py-2">
+                      <input
+                        type="time"
+                        value={draft.startTime}
+                        onChange={(event) =>
+                          setManualDrafts((prev) =>
+                            prev.map((row) =>
+                              row.id === draft.id ? { ...row, startTime: event.target.value, error: null } : row
+                            )
+                          )
+                        }
+                        className="w-28 rounded-md border border-slate-300 px-2 py-1"
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <input
+                        type="time"
+                        value={draft.endTime}
+                        onChange={(event) =>
+                          setManualDrafts((prev) =>
+                            prev.map((row) => (row.id === draft.id ? { ...row, endTime: event.target.value, error: null } : row))
+                          )
+                        }
+                        className="w-28 rounded-md border border-slate-300 px-2 py-1"
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <input
+                        type="text"
+                        value={draft.focus}
+                        placeholder="Focus"
+                        onChange={(event) =>
+                          setManualDrafts((prev) =>
+                            prev.map((row) => (row.id === draft.id ? { ...row, focus: event.target.value } : row))
+                          )
+                        }
+                        className="w-full min-w-32 rounded-md border border-slate-300 px-2 py-1"
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <input
+                        type="text"
+                        value={draft.done}
+                        placeholder="What was done"
+                        onChange={(event) =>
+                          setManualDrafts((prev) =>
+                            prev.map((row) => (row.id === draft.id ? { ...row, done: event.target.value } : row))
+                          )
+                        }
+                        className="w-full min-w-40 rounded-md border border-slate-300 px-2 py-1"
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <input
+                        type="number"
+                        min={0}
+                        value={draft.interruptions}
+                        onChange={(event) =>
+                          setManualDrafts((prev) =>
+                            prev.map((row) => (row.id === draft.id ? { ...row, interruptions: event.target.value } : row))
+                          )
+                        }
+                        className="w-20 rounded-md border border-slate-300 px-2 py-1"
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const startIso = buildTodayIso(draft.startTime);
+                            const endIso = buildTodayIso(draft.endTime);
+                            const interruptions = Number(draft.interruptions || "0");
+                            if (!startIso || !endIso) {
+                              setManualDrafts((prev) =>
+                                prev.map((row) => (row.id === draft.id ? { ...row, error: "Use valid start/end times." } : row))
+                              );
+                              return;
+                            }
+                            const startDate = new Date(startIso);
+                            const endDate = new Date(endIso);
+                            if (endDate.getTime() <= startDate.getTime()) {
+                              setManualDrafts((prev) =>
+                                prev.map((row) =>
+                                  row.id === draft.id ? { ...row, error: "End time must be after start time." } : row
+                                )
+                              );
+                              return;
+                            }
+                            if (!Number.isFinite(interruptions) || interruptions < 0) {
+                              setManualDrafts((prev) =>
+                                prev.map((row) =>
+                                  row.id === draft.id ? { ...row, error: "Interruptions must be 0 or more." } : row
+                                )
+                              );
+                              return;
+                            }
+
+                            setPomodoroState((prev) => {
+                              const next = addManualPomodoroSession(prev, {
+                                startedAtIso: startIso,
+                                endedAtIso: endIso,
+                                focus: draft.focus,
+                                done: draft.done,
+                                interruptions,
+                              });
+                              writePomodoroState(next, "pomodoro-page");
+                              return next;
+                            });
+                            setManualDrafts((prev) => prev.filter((row) => row.id !== draft.id));
+                          }}
+                          className="rounded-md bg-[#0BA5E9] px-2.5 py-1 text-xs font-semibold text-white hover:bg-[#0994cf]"
+                        >
+                          Save
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setManualDrafts((prev) => prev.filter((row) => row.id !== draft.id))}
+                          className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                      {draft.error && <p className="mt-1 text-xs text-rose-600">{draft.error}</p>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
         <table className="min-w-full text-sm">
           <thead className="bg-slate-50 text-left text-slate-600">
             <tr>
-              <th className="px-4 py-2">Ended</th>
+              <th className="px-4 py-2">Start</th>
+              <th className="px-4 py-2">End</th>
               <th className="px-4 py-2">Focus</th>
               <th className="px-4 py-2">What was done</th>
               <th className="px-4 py-2">Interruptions</th>
@@ -276,14 +368,22 @@ export default function PomodoroPageClient() {
           </thead>
           <tbody>
             {completedSessions.length === 0 && (
-              <tr className="border-t border-slate-100">
-                <td colSpan={4} className="px-4 py-3 text-slate-500">
+              <tr>
+                <td colSpan={5} className="px-4 py-3 text-slate-500">
                   No completed pomodoros yet.
                 </td>
               </tr>
             )}
             {completedSessions.map((session) => (
               <tr key={session.id} className="border-t border-slate-100">
+                <td className="px-4 py-2 text-slate-700">
+                  {new Date(session.startedAt).toLocaleString(undefined, {
+                    month: "short",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </td>
                 <td className="px-4 py-2 text-slate-700">
                   {new Date(session.endedAt).toLocaleString(undefined, {
                     month: "short",
