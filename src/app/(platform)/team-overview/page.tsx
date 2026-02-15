@@ -1,7 +1,5 @@
-import TimeDashboard from "@/app/components/TimeDashboard";
-import { listMemberProfiles } from "@/lib/manualTimeEntriesStore";
+import { redirect } from "next/navigation";
 
 export default async function TeamOverviewPage() {
-  const members = await listMemberProfiles();
-  return <TimeDashboard members={members.map((m) => ({ name: m.name }))} initialMode="team" allowAllCalendars={false} />;
+  redirect("/track");
 }

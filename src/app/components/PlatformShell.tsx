@@ -367,18 +367,6 @@ export default function PlatformShell({
             </div>
 
             <div>
-              <p className="px-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Analyze</p>
-              <div className="mt-2 space-y-1.5">
-                <Link href="/team-overview" prefetch className={navClass(isActive(pathname, "/team-overview"))}>
-                  <span className="inline-flex items-center gap-2">
-                    <TeamIcon className={iconClass()} />
-                    <span>Team overview</span>
-                  </span>
-                </Link>
-              </div>
-            </div>
-
-            <div>
               <p className="px-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Manage</p>
               <div className="mt-2 space-y-1.5">
                 <Link href="/projects" prefetch className={navClass(isActive(pathname, "/projects"))}>
@@ -456,7 +444,7 @@ export default function PlatformShell({
 
           <div className="mt-4 rounded-xl border border-slate-200 bg-sky-50 p-3 text-xs text-slate-600">
             <p className="font-semibold text-slate-700">Tip</p>
-            <p className="mt-1">Use Tracking daily and review outcomes in Team overview.</p>
+            <p className="mt-1">Use Tracking daily and keep entries clean with project tags.</p>
           </div>
 
           <button
