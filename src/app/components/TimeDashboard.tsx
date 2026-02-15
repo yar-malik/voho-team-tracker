@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from "react";
-import { getProjectSurfaceColors } from "@/lib/projectColors";
+import { getProjectBaseColor, getProjectSurfaceColors } from "@/lib/projectColors";
 
 type Member = { name: string };
 
@@ -70,6 +70,9 @@ type TeamWeekResponse = {
   cooldownActive?: boolean;
   retryAfterSeconds?: number;
 };
+
+type ProjectItem = { key: string; name: string; color?: string | null };
+type ProjectsResponse = { projects: ProjectItem[]; error?: string };
 
 type SavedFilter = {
   id: string;
@@ -484,11 +487,15 @@ export default function TimeDashboard({
   const [lastStoppedAtByMember, setLastStoppedAtByMember] = useState<Record<string, number>>({});
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [memberPickerOpen, setMemberPickerOpen] = useState(false);
+  const [projects, setProjects] = useState<ProjectItem[]>([]);
+  const [modalProjectPickerOpen, setModalProjectPickerOpen] = useState(false);
+  const [modalProjectSearch, setModalProjectSearch] = useState("");
   const [blockDrag, setBlockDrag] = useState<BlockDragState | null>(null);
   const dayCalendarScrollRef = useRef<HTMLDivElement | null>(null);
   const allCalendarsScrollRef = useRef<HTMLDivElement | null>(null);
   const memberPickerRef = useRef<HTMLDivElement | null>(null);
   const allCalendarsDatePickerRef = useRef<HTMLInputElement | null>(null);
+  const modalProjectPickerRef = useRef<HTMLDivElement | null>(null);
   const suppressBlockClickUntilRef = useRef(0);
 
   const hasMembers = members.length > 0;
@@ -541,6 +548,24 @@ export default function TimeDashboard({
       window.removeEventListener("keydown", onEscape);
     };
   }, [memberPickerOpen]);
+
+  useEffect(() => {
+    if (!modalProjectPickerOpen) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (!modalProjectPickerRef.current) return;
+      if (modalProjectPickerRef.current.contains(event.target as Node)) return;
+      setModalProjectPickerOpen(false);
+    };
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setModalProjectPickerOpen(false);
+    };
+    window.addEventListener("mousedown", onPointerDown);
+    window.addEventListener("keydown", onEscape);
+    return () => {
+      window.removeEventListener("mousedown", onPointerDown);
+      window.removeEventListener("keydown", onEscape);
+    };
+  }, [modalProjectPickerOpen]);
 
   useEffect(() => {
     setMode(sanitizeMode(initialMode));
@@ -649,6 +674,27 @@ export default function TimeDashboard({
       active = false;
     };
   }, [member, date, mode, refreshTick]);
+
+  useEffect(() => {
+    let active = true;
+    fetch(`/api/projects?_req=${Date.now()}`, { cache: "no-store" })
+      .then(async (res) => {
+        const payload = (await res.json()) as ProjectsResponse;
+        if (!res.ok || payload.error) throw new Error(payload.error || "Failed to load projects");
+        return payload.projects ?? [];
+      })
+      .then((rows) => {
+        if (!active) return;
+        setProjects(rows);
+      })
+      .catch(() => {
+        if (!active) return;
+        setProjects([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!(mode === "team" || mode === "all" || mode === "member")) return;
@@ -987,6 +1033,8 @@ export default function TimeDashboard({
       deleting: false,
       error: null,
     });
+    setModalProjectPickerOpen(false);
+    setModalProjectSearch("");
   };
 
   const hideHoverTooltip = () => setHoverTooltip(null);
@@ -1059,6 +1107,20 @@ export default function TimeDashboard({
     setDate(filter.date);
     setMode(sanitizeMode("all"));
   };
+
+  const filteredModalProjects = useMemo(() => {
+    const query = modalProjectSearch.trim().toLowerCase();
+    const sorted = [...projects].sort((a, b) => a.name.localeCompare(b.name));
+    if (!query) return sorted;
+    return sorted.filter((project) => project.name.toLowerCase().includes(query));
+  }, [projects, modalProjectSearch]);
+
+  const modalSelectedProjectColor = useMemo(() => {
+    const normalized = entryEditor?.project.trim().toLowerCase() ?? "";
+    if (!normalized) return null;
+    const found = projects.find((project) => project.name.trim().toLowerCase() === normalized);
+    return found?.color ?? null;
+  }, [entryEditor?.project, projects]);
 
   if (!hasMembers) {
     return (
@@ -1942,15 +2004,63 @@ export default function TimeDashboard({
                   className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-xl font-semibold"
                 />
                 <div className="flex flex-wrap items-center gap-3">
-                  <input
-                    type="text"
-                    value={entryEditor.project}
-                    onChange={(event) =>
-                      setEntryEditor((prev) => (prev ? { ...prev, project: event.target.value, error: null } : prev))
-                    }
-                    placeholder="Project"
-                    className="min-w-[190px] rounded-full border border-amber-200 bg-amber-50 px-4 py-1.5 text-xl font-medium text-amber-700"
-                  />
+                  <div className="relative" ref={modalProjectPickerRef}>
+                    <button
+                      type="button"
+                      onClick={() => setModalProjectPickerOpen((open) => !open)}
+                      className="inline-flex min-w-[220px] items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-4 py-1.5 text-left text-xl font-medium text-amber-700"
+                    >
+                      <span
+                        className="inline-block h-2.5 w-2.5 rounded-full"
+                        style={{ backgroundColor: getProjectBaseColor(entryEditor.project || "No project", modalSelectedProjectColor) }}
+                      />
+                      <span className="max-w-[160px] truncate">{entryEditor.project || "No project"}</span>
+                    </button>
+                    {modalProjectPickerOpen && (
+                      <div className="absolute left-0 z-50 mt-2 w-[340px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_18px_48px_rgba(15,23,42,0.24)]">
+                        <div className="border-b border-slate-100 p-3">
+                          <input
+                            type="text"
+                            value={modalProjectSearch}
+                            onChange={(event) => setModalProjectSearch(event.target.value)}
+                            placeholder="Search by project"
+                            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 outline-none"
+                            autoFocus
+                          />
+                        </div>
+                        <div className="max-h-[280px] overflow-y-auto p-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEntryEditor((prev) => (prev ? { ...prev, project: "", error: null } : prev));
+                              setModalProjectPickerOpen(false);
+                            }}
+                            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left hover:bg-slate-50"
+                          >
+                            <span className="h-2.5 w-2.5 rounded-full bg-slate-300" />
+                            <span className="text-sm font-medium text-slate-700">No project</span>
+                          </button>
+                          {filteredModalProjects.map((project) => (
+                            <button
+                              key={project.key}
+                              type="button"
+                              onClick={() => {
+                                setEntryEditor((prev) => (prev ? { ...prev, project: project.name, error: null } : prev));
+                                setModalProjectPickerOpen(false);
+                              }}
+                              className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left hover:bg-slate-50"
+                            >
+                              <span
+                                className="h-2.5 w-2.5 rounded-full"
+                                style={{ backgroundColor: getProjectBaseColor(project.name, project.color) }}
+                              />
+                              <span className="truncate text-sm font-semibold text-slate-800">{project.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                   <span className="text-xl text-slate-400">🏷</span>
                   <span className="text-2xl text-slate-300">$</span>
                 </div>
