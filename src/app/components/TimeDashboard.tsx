@@ -2032,7 +2032,7 @@ export default function TimeDashboard({
               </div>
             </div>
             {allCalendarView === "calendar" && (
-            <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_280px]">
+            <div className="mt-4">
             <div ref={allCalendarsScrollRef} className="max-h-[72vh] overflow-auto">
               <div className="grid min-w-[760px] grid-cols-[3.5rem_1fr] gap-2">
                 <div className="relative" style={{ height: `${HOURS_IN_DAY * HOUR_HEIGHT}px` }}>
@@ -2173,23 +2173,6 @@ export default function TimeDashboard({
                 </div>
               </div>
             </div>
-            <aside className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-slate-800">Goals</h3>
-                <button
-                  type="button"
-                  className="rounded-md px-2 py-1 text-sm font-semibold text-[#0BA5E9] hover:bg-sky-100"
-                >
-                  +
-                </button>
-              </div>
-              <button
-                type="button"
-                className="mt-4 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.1em] text-[#0BA5E9] hover:bg-sky-50"
-              >
-                Create a goal
-              </button>
-            </aside>
             </div>
             )}
             {allCalendarView === "list" && (
