@@ -119,6 +119,37 @@ function formatTimer(totalSeconds: number) {
   return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
+function sumPomodoroCompletions(state: PomodoroState) {
+  return Object.values(state.completionsByDay).reduce((sum, value) => sum + Math.max(0, Number(value || 0)), 0);
+}
+
+function playPomodoroDoneSound() {
+  try {
+    const AudioCtx = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const now = ctx.currentTime;
+    const notes = [880, 1174, 1568];
+    notes.forEach((freq, index) => {
+      const start = now + index * 0.14;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, start);
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.12, start + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.12);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + 0.13);
+    });
+    window.setTimeout(() => void ctx.close(), 900);
+  } catch {
+    // Ignore audio failures in unsupported/restricted browsers.
+  }
+}
+
 function setFaviconHref(href: string, stateKey: "idle" | "running") {
   const withVersion = `${href}?state=${stateKey}&v=20260216`;
   const relTargets = ["icon", "shortcut icon", "apple-touch-icon"];
@@ -162,6 +193,8 @@ export default function PlatformShell({
     activeSessionId: null,
     updatedAt: Date.now(),
   });
+  const pomodoroReadyRef = useRef(false);
+  const completionCountRef = useRef(0);
 
   useEffect(() => {
     defaultTitleRef.current = document.title || "Voho Track";
@@ -174,9 +207,20 @@ export default function PlatformShell({
 
   useEffect(() => {
     const restored = readPomodoroState();
+    completionCountRef.current = sumPomodoroCompletions(restored);
+    pomodoroReadyRef.current = true;
     setPomodoroState(restored);
     writePomodoroState(restored, "platform-shell");
   }, []);
+
+  useEffect(() => {
+    if (!pomodoroReadyRef.current) return;
+    const total = sumPomodoroCompletions(pomodoroState);
+    if (total > completionCountRef.current) {
+      playPomodoroDoneSound();
+    }
+    completionCountRef.current = total;
+  }, [pomodoroState]);
 
   useEffect(() => {
     const syncListener = (event: Event) => {
