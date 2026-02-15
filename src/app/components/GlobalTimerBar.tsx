@@ -362,8 +362,7 @@ export default function GlobalTimerBar({ memberName }: { memberName: string | nu
     setTimerInput(formatTimerFixedHours(durationMinutes * 60));
     setBusy(true);
     try {
-      const deltaSeconds = Math.max(1, Math.round(durationMinutes * 60));
-      const elapsedSeconds = current ? Math.max(1, runningSeconds + deltaSeconds) : deltaSeconds;
+      const elapsedSeconds = Math.max(1, Math.round(durationMinutes * 60));
       if (current) {
         const optimistic = buildOptimisticRunningTimer({
           elapsedSeconds,
@@ -401,6 +400,7 @@ export default function GlobalTimerBar({ memberName }: { memberName: string | nu
           return;
         }
         setCurrent(patchData.current);
+        setTimerInputDirty(false);
         window.dispatchEvent(
           new CustomEvent("voho-timer-changed", {
             detail: {
@@ -462,6 +462,7 @@ export default function GlobalTimerBar({ memberName }: { memberName: string | nu
           return;
         }
         setCurrent(data.current);
+        setTimerInputDirty(false);
         window.dispatchEvent(
           new CustomEvent("voho-timer-changed", {
             detail: {
@@ -481,7 +482,7 @@ export default function GlobalTimerBar({ memberName }: { memberName: string | nu
     } finally {
       setBusy(false);
     }
-  }, [memberName, current, timerInput, description, projectName, persistRunningDraft, runningSeconds]);
+  }, [memberName, current, timerInput, description, projectName, persistRunningDraft]);
 
   if (!memberName) return null;
 
@@ -590,6 +591,7 @@ export default function GlobalTimerBar({ memberName }: { memberName: string | nu
               if (parsedMinutes) {
                 setTimerInput(formatTimerFixedHours(parsedMinutes * 60));
               }
+              setTimerInputDirty(false);
             }}
             placeholder="0:00:00"
             disabled={busy}

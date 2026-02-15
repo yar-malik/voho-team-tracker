@@ -917,6 +917,16 @@ export default function TimeDashboard({
     };
   }, []);
 
+  useEffect(() => {
+    const onEntriesChanged = () => {
+      setRefreshTick((value) => value + 1);
+    };
+    window.addEventListener("voho-entries-changed", onEntriesChanged as EventListener);
+    return () => {
+      window.removeEventListener("voho-entries-changed", onEntriesChanged as EventListener);
+    };
+  }, []);
+
   const runningEntry = useMemo(() => {
     if (!data?.current) return null;
     if (data.current.duration >= 0) return null;
