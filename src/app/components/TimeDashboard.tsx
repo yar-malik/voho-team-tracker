@@ -942,13 +942,24 @@ export default function TimeDashboard({
 
   const dailyRankingSeries = useMemo(() => {
     const totals = new Map<string, number>();
-    for (const item of teamData?.members ?? []) {
-      totals.set(item.name.toLowerCase(), Math.max(0, item.totalSeconds));
+    for (const memberData of teamData?.members ?? []) {
+      const key = memberData.name.trim().toLowerCase();
+      // Derive from actual entries to keep ranking aligned with what is visible in calendars.
+      const secondsFromEntries = memberData.entries.reduce((sum, entry) => sum + getEntrySeconds(entry), 0);
+      const fallback = Math.max(0, Number(memberData.totalSeconds ?? 0));
+      totals.set(key, Math.max(secondsFromEntries, fallback));
     }
-    const rows = members.map((item) => ({
-      name: item.name,
-      seconds: totals.get(item.name.toLowerCase()) ?? 0,
-    }));
+
+    const sourceNames =
+      members.length > 0 ? members.map((item) => item.name) : (teamData?.members ?? []).map((item) => item.name);
+    const rows = sourceNames
+      .map((name) => name.trim())
+      .filter((name) => name.length > 0)
+      .map((name) => ({
+        name,
+        seconds: totals.get(name.toLowerCase()) ?? 0,
+      }));
+
     return rows.sort((a, b) => {
       if (b.seconds !== a.seconds) return b.seconds - a.seconds;
       const aIsYar = a.name.trim().toLowerCase() === "yar";
@@ -957,7 +968,7 @@ export default function TimeDashboard({
       if (!aIsYar && bIsYar) return 1;
       return a.name.localeCompare(b.name);
     });
-  }, [teamData, members]);
+  }, [teamData, members, relativeNowMs]);
 
   const dailyRankingMaxHours = useMemo(() => {
     const maxSeconds = dailyRankingSeries.reduce((max, row) => Math.max(max, row.seconds), 0);

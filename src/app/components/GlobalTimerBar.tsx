@@ -105,6 +105,22 @@ function sleep(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
+function setFaviconFromTimerState(isRunning: boolean) {
+  const href = isRunning ? "/favicon-running-v2.svg" : "/favicon-idle-v2.svg";
+  const withVersion = `${href}?state=${isRunning ? "running" : "idle"}&v=20260216`;
+  const links = Array.from(document.querySelectorAll("link[rel*='icon']")) as HTMLLinkElement[];
+  if (links.length === 0) {
+    const created = document.createElement("link");
+    created.rel = "icon";
+    created.href = withVersion;
+    document.head.appendChild(created);
+    return;
+  }
+  for (const link of links) {
+    link.href = withVersion;
+  }
+}
+
 export default function GlobalTimerBar({ memberName }: { memberName: string | null }) {
   const [current, setCurrent] = useState<RunningTimer | null>(null);
   const [projects, setProjects] = useState<ProjectItem[]>([]);
@@ -307,6 +323,10 @@ export default function GlobalTimerBar({ memberName }: { memberName: string | nu
     if (Number.isNaN(startedAtMs)) return Math.max(0, current.durationSeconds);
     return Math.max(0, Math.floor((nowMs - startedAtMs) / 1000));
   }, [current, nowMs]);
+
+  useEffect(() => {
+    setFaviconFromTimerState(Boolean(current));
+  }, [current]);
 
   const timerDisplayValue = useMemo(() => {
     if (timerInputDirty) return timerInput;
