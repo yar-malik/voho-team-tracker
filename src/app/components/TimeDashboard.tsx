@@ -989,6 +989,10 @@ export default function TimeDashboard({
     const term = search.toLowerCase();
     return members.filter((item) => item.name.toLowerCase().includes(term));
   }, [members, search]);
+  const selectedMembersLower = useMemo(
+    () => new Set(selectedMembers.map((name) => name.trim().toLowerCase())),
+    [selectedMembers]
+  );
 
   const summary = useMemo(() => {
     if (!data) return [] as { label: string; seconds: number }[];
@@ -1007,11 +1011,10 @@ export default function TimeDashboard({
 
   const dailyRankingSeries = useMemo(() => {
     if (!teamData) return [] as Array<{ name: string; seconds: number; isRunning: boolean }>;
-    const allowed = new Set(selectedMembers.map((item) => item.trim().toLowerCase()));
     return teamData.members
       .filter((memberData) => {
-        if (allowed.size === 0) return true;
-        return allowed.has(memberData.name.trim().toLowerCase());
+        if (selectedMembersLower.size === 0) return true;
+        return selectedMembersLower.has(memberData.name.trim().toLowerCase());
       })
       .map((memberData) => {
         const cardEntries = memberData.entries.filter((entry) => !isExcludedFromRanking(entry.project_name));
@@ -1027,7 +1030,7 @@ export default function TimeDashboard({
         if (b.seconds !== a.seconds) return b.seconds - a.seconds;
         return a.name.localeCompare(b.name);
       });
-  }, [teamData, selectedMembers]);
+  }, [teamData, selectedMembersLower]);
 
   const dailyRankingMaxHours = useMemo(() => {
     const maxSeconds = dailyRankingSeries.reduce((max, row) => Math.max(max, row.seconds), 0);
@@ -1043,9 +1046,11 @@ export default function TimeDashboard({
 
   const teamTimeline = useMemo(() => {
     if (!teamData) return [] as Array<{ name: string; blocks: TimelineBlock[]; maxLanes: number }>;
-    const allowed = new Set(selectedMembers);
     const orderedMembers = [...teamData.members]
-      .filter((item) => allowed.has(item.name))
+      .filter((item) => {
+        if (selectedMembersLower.size === 0) return true;
+        return selectedMembersLower.has(item.name.trim().toLowerCase());
+      })
       .sort((a, b) => {
       const aIsYar = a.name.trim().toLowerCase() === "yar";
       const bIsYar = b.name.trim().toLowerCase() === "yar";
@@ -1057,33 +1062,34 @@ export default function TimeDashboard({
       name: memberData.name,
       ...buildTimelineBlocks(memberData.entries, date),
     }));
-  }, [teamData, date, selectedMembers]);
+  }, [teamData, date, selectedMembersLower]);
 
   const visibleTeamEntries = useMemo(() => {
     if (!teamData) return [] as Array<{ memberName: string; entry: TimeEntry }>;
-    const allowed = new Set(selectedMembers);
     const rows: Array<{ memberName: string; entry: TimeEntry }> = [];
     for (const memberData of teamData.members) {
-      if (!allowed.has(memberData.name)) continue;
+      if (selectedMembersLower.size > 0 && !selectedMembersLower.has(memberData.name.trim().toLowerCase())) continue;
       for (const entry of memberData.entries) {
         rows.push({ memberName: memberData.name, entry });
       }
     }
     return rows.sort((a, b) => new Date(a.entry.start).getTime() - new Date(b.entry.start).getTime());
-  }, [teamData, selectedMembers]);
+  }, [teamData, selectedMembersLower]);
 
   const visibleTeamTotals = useMemo(() => {
     if (!teamData) return [] as Array<{ memberName: string; seconds: number; entries: number }>;
-    const allowed = new Set(selectedMembers);
     const rows = teamData.members
-      .filter((memberData) => allowed.has(memberData.name))
+      .filter((memberData) => {
+        if (selectedMembersLower.size === 0) return true;
+        return selectedMembersLower.has(memberData.name.trim().toLowerCase());
+      })
       .map((memberData) => ({
         memberName: memberData.name,
         seconds: memberData.entries.reduce((sum, entry) => sum + getEntrySeconds(entry), 0),
         entries: memberData.entries.length,
       }));
     return rows.sort((a, b) => b.seconds - a.seconds);
-  }, [teamData, selectedMembers]);
+  }, [teamData, selectedMembersLower]);
 
   const memberWeekSeries = useMemo(() => {
     if (!teamWeekData || !member) return [] as Array<{ date: string; seconds: number }>;
@@ -1136,12 +1142,11 @@ export default function TimeDashboard({
   );
   const allModeWeekTotalSeconds = useMemo(() => {
     if (!teamWeekData) return 0;
-    const allowed = new Set(selectedMembers.map((name) => name.trim().toLowerCase()));
     return teamWeekData.members.reduce((sum, row) => {
-      if (!allowed.has(row.name.trim().toLowerCase())) return sum;
+      if (selectedMembersLower.size > 0 && !selectedMembersLower.has(row.name.trim().toLowerCase())) return sum;
       return sum + row.totalSeconds;
     }, 0);
-  }, [teamWeekData, selectedMembers]);
+  }, [teamWeekData, selectedMembersLower]);
 
   const openEntryModal = (entry: TimeEntry, memberName: string) => {
     setSelectedEntry({
@@ -1345,6 +1350,64 @@ export default function TimeDashboard({
             onChange={(event) => setDate(event.target.value)}
           />
         </div>
+        {(mode === "all" || mode === "team") && (
+          <div className="relative w-full" ref={memberPickerRef}>
+            <label className="text-sm font-medium text-slate-600">Visible members</label>
+            <button
+              type="button"
+              onClick={() => setMemberPickerOpen((open) => !open)}
+              className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-left text-sm text-slate-900"
+            >
+              {selectedMembers.length === 0 ? "None selected" : `Visible members: ${selectedMembers.length}`}
+            </button>
+            {memberPickerOpen && (
+              <div className="absolute z-40 mt-2 max-h-64 w-full overflow-auto rounded-xl border border-slate-200 bg-white p-2 shadow-xl">
+                <div className="mb-2 flex items-center justify-between gap-2 px-1">
+                  <button
+                    type="button"
+                    className="text-xs font-semibold text-sky-700"
+                    onClick={() => setSelectedMembers(members.map((item) => item.name))}
+                  >
+                    Select all
+                  </button>
+                  {restrictToMember && (
+                    <button
+                      type="button"
+                      className="text-xs font-semibold text-sky-700"
+                      onClick={() => setSelectedMembers([restrictToMember])}
+                    >
+                      Only mine
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="text-xs font-semibold text-sky-700"
+                    onClick={() => setSelectedMembers([])}
+                  >
+                    Clear
+                  </button>
+                </div>
+                {members.map((item) => {
+                  const checked = selectedMembers.includes(item.name);
+                  return (
+                    <label key={item.name} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() =>
+                          setSelectedMembers((prev) =>
+                            prev.includes(item.name) ? prev.filter((name) => name !== item.name) : [...prev, item.name]
+                          )
+                        }
+                      />
+                      <span className="text-sm text-slate-700">{item.name}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
         {(mode === "all" || mode === "team") && (
           <div className="md:col-span-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
             <div className="flex items-center justify-between gap-2">
@@ -1698,6 +1761,10 @@ export default function TimeDashboard({
               </p>
               <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {[...teamData.members]
+                  .filter((memberData) => {
+                    if (selectedMembersLower.size === 0) return true;
+                    return selectedMembersLower.has(memberData.name.trim().toLowerCase());
+                  })
                   .sort((a, b) => {
                     const aIsYar = a.name.trim().toLowerCase() === "yar";
                     const bIsYar = b.name.trim().toLowerCase() === "yar";
@@ -1820,7 +1887,12 @@ export default function TimeDashboard({
                     </tr>
                   </thead>
                   <tbody>
-                    {teamWeekData.members.map((row, index) => (
+                    {teamWeekData.members
+                      .filter((row) => {
+                        if (selectedMembersLower.size === 0) return true;
+                        return selectedMembersLower.has(row.name.trim().toLowerCase());
+                      })
+                      .map((row, index) => (
                       <tr key={row.name} className="border-b border-slate-100">
                         <td className="px-2 py-2 font-semibold text-slate-900">{index + 1}</td>
                         <td className="px-2 py-2 text-slate-800">
@@ -1839,7 +1911,7 @@ export default function TimeDashboard({
                           );
                         })}
                       </tr>
-                    ))}
+                      ))}
                   </tbody>
                 </table>
               </div>
@@ -1861,61 +1933,6 @@ export default function TimeDashboard({
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap items-center gap-2">
-              <div className="relative w-full max-w-xs" ref={memberPickerRef}>
-                <button
-                  type="button"
-                  onClick={() => setMemberPickerOpen((open) => !open)}
-                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-left text-sm text-slate-900"
-                >
-                  Visible calendars: {selectedMembers.length}
-                </button>
-                {memberPickerOpen && (
-                  <div className="absolute z-40 mt-2 max-h-64 w-full overflow-auto rounded-xl border border-slate-200 bg-white p-2 shadow-xl">
-                    <div className="mb-2 flex items-center justify-between gap-2 px-1">
-                      <button
-                        type="button"
-                        className="text-xs font-semibold text-sky-700"
-                        onClick={() => setSelectedMembers(members.map((item) => item.name))}
-                      >
-                        Select all
-                      </button>
-                      {restrictToMember && (
-                        <button
-                          type="button"
-                          className="text-xs font-semibold text-sky-700"
-                          onClick={() => setSelectedMembers([restrictToMember])}
-                        >
-                          Only mine
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        className="text-xs font-semibold text-sky-700"
-                        onClick={() => setSelectedMembers([])}
-                      >
-                        Clear
-                      </button>
-                    </div>
-                    {members.map((item) => {
-                      const checked = selectedMembers.includes(item.name);
-                      return (
-                        <label key={item.name} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50">
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() =>
-                              setSelectedMembers((prev) =>
-                                prev.includes(item.name) ? prev.filter((name) => name !== item.name) : [...prev, item.name]
-                              )
-                            }
-                          />
-                          <span className="text-sm text-slate-700">{item.name}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
               <button
                 type="button"
                 onClick={() => setDate(formatDateInput(new Date()))}
