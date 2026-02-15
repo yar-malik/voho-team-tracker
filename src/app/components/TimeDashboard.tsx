@@ -84,7 +84,7 @@ type SavedFilter = {
 const FILTERS_KEY = "voho-team-filters";
 const LAST_KEY = "voho-team-last";
 const HOURS_IN_DAY = 24;
-const HOUR_HEIGHT = 72;
+const HOUR_HEIGHT = 88;
 const MIN_BLOCK_HEIGHT = 24;
 const DRAG_SNAP_MINUTES = 5;
 const RANKING_ENTRY_CAP_SECONDS = 4 * 60 * 60;
@@ -149,6 +149,7 @@ function getDayBoundsMs(dateInput: string) {
 }
 
 function formatHourLabel(hour: number): string {
+  if (hour === 24) return "12 AM";
   if (hour === 0) return "12 AM";
   if (hour < 12) return `${hour} AM`;
   if (hour === 12) return "12 PM";
