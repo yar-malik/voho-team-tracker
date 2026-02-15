@@ -1322,7 +1322,7 @@ export default function TimeDashboard({
                       const hours = row.seconds / 3600;
                       const heightPercent = Math.max(6, (hours / dailyRankingMaxHours) * 100);
                       return (
-                        <div key={row.name} className="flex min-w-[56px] flex-1 flex-col items-center gap-1">
+                        <div key={row.name} className="flex h-full min-w-[56px] flex-1 flex-col items-center justify-end gap-1">
                           <div
                             className="w-full rounded-t-md bg-gradient-to-t from-[#0BA5E9] to-[#67D0F8]"
                             style={{ height: `${heightPercent}%` }}
