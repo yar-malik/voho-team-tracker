@@ -45,7 +45,6 @@ type TeamResponse = {
   warning?: string | null;
   error?: string;
 };
-type MembersResponse = { members?: Array<{ name?: string; member_name?: string }>; error?: string };
 
 type CalendarDraft = { hour: number; minute: number };
 type EntryEditorState = {
@@ -472,7 +471,7 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
       }
     };
 
-      const loadDailyRanking = async () => {
+    const loadDailyRanking = async () => {
       const normalizeAndSort = (rows: Array<{ name: string; seconds: number }>) =>
         [...rows].sort((a, b) => {
           if (b.seconds !== a.seconds) return b.seconds - a.seconds;
@@ -482,21 +481,6 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
           if (!aIsYar && bIsYar) return 1;
           return a.name.localeCompare(b.name);
         });
-
-      const loadMembersFallback = async (warningMessage: string) => {
-        const membersData = await fetch(`/api/members?_req=${Date.now()}`, { cache: "no-store" }).then(async (res) => {
-          const data = (await res.json()) as MembersResponse;
-          if (!res.ok || data.error) throw new Error(data.error || "Failed to load members");
-          return data;
-        });
-        if (!active) return;
-        const rows = (membersData.members ?? [])
-          .map((member) => (member.name ?? member.member_name ?? "").trim())
-          .filter((name) => name.length > 0)
-          .map((name) => ({ name, seconds: 0 }));
-          setDailyRanking(normalizeAndSort(rows));
-          setTeamHoursWarning(warningMessage);
-      };
 
       try {
         const rankingData = await fetch(
@@ -509,26 +493,26 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
           if (!res.ok || data.error) throw new Error(data.error || "Failed to load team hours");
           return data;
         });
+
         if (!active) return;
-        const rows = (rankingData.members ?? [])
-          .map((member) => ({
-            name: member.name,
-            seconds: Math.max(0, Number(member.totalSeconds ?? 0)),
-          }));
+        const rows = (rankingData.members ?? []).map((member) => ({
+          name: member.name,
+          seconds: Math.max(0, Number(member.totalSeconds ?? 0)),
+        }));
+
+        // Always show at least the current member bar to avoid blank panel.
         if (rows.length === 0) {
-          await loadMembersFallback("Team totals unavailable, showing members with 0h.");
+          setDailyRanking([{ name: memberName, seconds: 0 }]);
+          setTeamHoursWarning("No team members returned for this date.");
           return;
         }
+
         setDailyRanking(normalizeAndSort(rows));
         setTeamHoursWarning(rankingData.warning ?? null);
-      } catch {
-        try {
-          await loadMembersFallback("Team totals unavailable, showing members with 0h.");
-        } catch {
-          if (!active) return;
-          setDailyRanking([]);
-          setTeamHoursWarning("Failed to load team hours.");
-        }
+      } catch (err) {
+        if (!active) return;
+        setDailyRanking([{ name: memberName, seconds: Math.max(0, entries?.totalSeconds ?? 0) }]);
+        setTeamHoursWarning(err instanceof Error ? err.message : "Failed to load team hours.");
       }
     };
 
