@@ -1855,19 +1855,35 @@ export default function TimeDashboard({
                               (entry) => `${entry.id}-${new Date(entry.start).getTime()}` === block.id
                             );
                           const blockStyle = getProjectBlockStyle(block.project, block.projectColor);
+                          const isDraggingThis =
+                            !!sourceEntry &&
+                            blockDrag?.entry.id === sourceEntry.id &&
+                            blockDrag.memberName.toLowerCase() === memberTimeline.name.toLowerCase();
+                          const topPx = isDraggingThis ? blockDrag.previewTopPx : block.topPx;
+                          const heightPx = isDraggingThis ? blockDrag.previewHeightPx : block.heightPx;
                           return (
-                            <button
+                            <div
                               key={block.id}
-                              type="button"
-                              className="absolute overflow-hidden rounded-lg border px-2 py-1 text-left shadow-sm"
+                              role="button"
+                              tabIndex={0}
+                              className={`absolute overflow-hidden rounded-lg border px-2 py-1 text-left shadow-sm ${
+                                sourceEntry?.stop === null ? "cursor-default" : "cursor-move"
+                              } ${isDraggingThis ? "ring-2 ring-sky-300" : ""}`}
                               style={{
-                                top: `${block.topPx}px`,
-                                height: `${block.heightPx}px`,
+                                top: `${topPx}px`,
+                                height: `${heightPx}px`,
                                 left: `calc(${(block.lane / memberTimeline.maxLanes) * 100}% + 0.25rem)`,
                                 width: `calc(${100 / memberTimeline.maxLanes}% - 0.5rem)`,
                                 ...blockStyle,
                               }}
                               title={sourceEntry ? getEntryTooltipText(sourceEntry, memberTimeline.name) : undefined}
+                              onKeyDown={(event) => {
+                                if (!sourceEntry) return;
+                                if (event.key === "Enter" || event.key === " ") {
+                                  event.preventDefault();
+                                  openEntryModal(sourceEntry, memberTimeline.name);
+                                }
+                              }}
                               onMouseEnter={(event) => {
                                 if (!sourceEntry) return;
                                 placeHoverTooltip(event, getEntryTooltipText(sourceEntry, memberTimeline.name));
@@ -1877,15 +1893,38 @@ export default function TimeDashboard({
                                 placeHoverTooltip(event, getEntryTooltipText(sourceEntry, memberTimeline.name));
                               }}
                               onMouseLeave={hideHoverTooltip}
+                              onMouseDown={(event) => {
+                                if (!sourceEntry) return;
+                                startBlockDrag(event, "move", sourceEntry, memberTimeline.name);
+                              }}
                               onClick={() => {
+                                if (Date.now() < suppressBlockClickUntilRef.current) return;
                                 if (!sourceEntry) return;
                                 openEntryModal(sourceEntry, memberTimeline.name);
                               }}
                             >
+                              {sourceEntry?.stop !== null && (
+                                <div
+                                  className="absolute inset-x-0 top-0 h-2 cursor-ns-resize"
+                                  onMouseDown={(event) => {
+                                    if (!sourceEntry) return;
+                                    startBlockDrag(event, "resize-start", sourceEntry, memberTimeline.name);
+                                  }}
+                                />
+                              )}
                               <div className="overflow-hidden">
                                 <p className="truncate text-xs font-semibold text-slate-900">{block.title}</p>
                               </div>
-                            </button>
+                              {sourceEntry?.stop !== null && (
+                                <div
+                                  className="absolute inset-x-0 bottom-0 h-2 cursor-ns-resize"
+                                  onMouseDown={(event) => {
+                                    if (!sourceEntry) return;
+                                    startBlockDrag(event, "resize-end", sourceEntry, memberTimeline.name);
+                                  }}
+                                />
+                              )}
+                            </div>
                           );
                         })}
                       </div>

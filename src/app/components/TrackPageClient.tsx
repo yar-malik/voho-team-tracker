@@ -38,9 +38,9 @@ type WeekTotalResponse = {
 
 type ProjectItem = { key: string; name: string; color?: string | null };
 type ProjectsResponse = { projects: ProjectItem[]; error?: string };
-type DailyRankingResponse = {
+type TeamResponse = {
   date: string;
-  members: Array<{ name: string; totalSeconds: number }>;
+  members: Array<{ name: string; totalSeconds: number; entries?: TimeEntry[] }>;
   source?: "db";
   warning?: string | null;
   error?: string;
@@ -261,7 +261,21 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
   const [blockDrag, setBlockDrag] = useState<BlockDragState | null>(null);
   const modalProjectPickerRef = useRef<HTMLDivElement | null>(null);
   const calendarScrollRef = useRef<HTMLDivElement | null>(null);
+  const suppressBlockClickUntilRef = useRef(0);
   const hourHeight = ZOOM_LEVELS[zoomLevel];
+
+  function openEntryEditor(block: CalendarBlock) {
+    setEntryEditor({
+      entryId: block.entryId,
+      description: block.description === "(No description)" ? "" : block.description,
+      project: block.project === "No project" ? "" : block.project,
+      startTime: formatTimeInputLocal(block.startIso),
+      // Running entries have null stop; default to current local time so user can quickly save correction.
+      stopTime: formatTimeInputLocal(block.stopIso ?? new Date().toISOString()),
+      saving: false,
+      error: null,
+    });
+  }
 
   useEffect(() => {
     if (!entryEditor) return;
@@ -341,17 +355,10 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
       if (!finalDrag) return;
 
       if (!finalDrag.hasMoved) {
-        setEntryEditor({
-          entryId: finalDrag.block.entryId,
-          description: finalDrag.block.description === "(No description)" ? "" : finalDrag.block.description,
-          project: finalDrag.block.project === "No project" ? "" : finalDrag.block.project,
-          startTime: formatTimeInputLocal(finalDrag.block.startIso),
-          stopTime: formatTimeInputLocal(finalDrag.block.stopIso),
-          saving: false,
-          error: null,
-        });
+        openEntryEditor(finalDrag.block);
         return;
       }
+      suppressBlockClickUntilRef.current = Date.now() + 250;
 
       const nextStartMinute = Math.round((finalDrag.previewTop / hourHeight) * 60);
       const nextDurationMinutes = Math.max(
@@ -493,10 +500,12 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
 
       try {
         const rankingData = await fetch(
-          `/api/ranking/daily?date=${encodeURIComponent(date)}&_req=${Date.now()}`,
+          `/api/team?date=${encodeURIComponent(date)}&tzOffset=${encodeURIComponent(
+            String(new Date().getTimezoneOffset())
+          )}&_req=${Date.now()}`,
           { cache: "no-store" }
         ).then(async (res) => {
-          const data = (await res.json()) as DailyRankingResponse;
+          const data = (await res.json()) as TeamResponse;
           if (!res.ok || data.error) throw new Error(data.error || "Failed to load team hours");
           return data;
         });
@@ -504,7 +513,7 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
         const rows = (rankingData.members ?? [])
           .map((member) => ({
             name: member.name,
-            seconds: Math.max(0, Number(member.totalSeconds ?? (member as { seconds?: number }).seconds ?? 0)),
+            seconds: Math.max(0, Number(member.totalSeconds ?? 0)),
           }));
         if (rows.length === 0) {
           await loadMembersFallback("Team totals unavailable, showing members with 0h.");
@@ -558,7 +567,7 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
     ) {
       return null;
     }
-    const minutes = now.getHours() * 60 + now.getMinutes();
+    const minutes = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
     return (minutes / 60) * hourHeight;
   }, [date, hourHeight, nowMs]);
 
@@ -816,15 +825,7 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
                     onKeyDown={(event) => {
                       if (event.key !== "Enter" && event.key !== " ") return;
                       event.preventDefault();
-                      setEntryEditor({
-                        entryId: block.entryId,
-                        description: block.description === "(No description)" ? "" : block.description,
-                        project: block.project === "No project" ? "" : block.project,
-                        startTime: formatTimeInputLocal(block.startIso),
-                        stopTime: formatTimeInputLocal(block.stopIso),
-                        saving: false,
-                        error: null,
-                      });
+                      openEntryEditor(block);
                     }}
                     onMouseDown={(event) => {
                       if (busy || block.isRunning) return;
@@ -840,6 +841,10 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
                         previewHeight: Math.max(22, block.height),
                         hasMoved: false,
                       });
+                    }}
+                    onClick={() => {
+                      if (Date.now() < suppressBlockClickUntilRef.current) return;
+                      openEntryEditor(block);
                     }}
                     className={`absolute overflow-hidden rounded-lg border px-2 py-1 text-left text-xs shadow-sm ${
                       block.isRunning ? "cursor-default" : "cursor-move"
