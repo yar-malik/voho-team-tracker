@@ -1025,6 +1025,17 @@ export default function TimeDashboard({
     return (minutesIntoDay / 60) * HOUR_HEIGHT;
   }, [date, relativeNowMs]);
 
+  const selectedDayHeadline = useMemo(() => {
+    const parsed = new Date(`${date}T00:00:00`);
+    if (Number.isNaN(parsed.getTime())) return date;
+    return parsed.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
+  }, [date]);
+
+  const liveClockLabel = useMemo(
+    () => new Date(relativeNowMs).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+    [relativeNowMs]
+  );
+
   const openEntryModal = (entry: TimeEntry, memberName: string) => {
     setSelectedEntry({
       entryId: entry.id,
@@ -1817,6 +1828,13 @@ export default function TimeDashboard({
                 aria-hidden="true"
               />
             </div>
+            <div className="mt-3 grid grid-cols-[3.5rem_1fr] items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+              <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Activity</div>
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-slate-700">{selectedDayHeadline}</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">{liveClockLabel}</p>
+              </div>
+            </div>
             <div ref={allCalendarsScrollRef} className="mt-4 max-h-[72vh] overflow-auto">
               <div className="grid min-w-[760px] grid-cols-[3.5rem_1fr] gap-2">
                 <div className="relative" style={{ height: `${HOURS_IN_DAY * HOUR_HEIGHT}px` }}>
@@ -1849,8 +1867,21 @@ export default function TimeDashboard({
                         {nowLineOffsetPx != null && (
                           <div className="pointer-events-none absolute left-0 right-0 z-20" style={{ top: `${nowLineOffsetPx}px` }}>
                             <div className="border-t-2 border-rose-500/90" />
+                            <span className="absolute -left-2 -top-[9px] inline-flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] leading-none text-white">
+                              ▶
+                            </span>
                           </div>
                         )}
+                        {Array.from({ length: HOURS_IN_DAY * 4 + 1 }).map((_, quarter) => {
+                          if (quarter % 4 === 0) return null;
+                          return (
+                            <div
+                              key={`quarter-${quarter}`}
+                              className="absolute left-0 right-0 border-t border-slate-200/55"
+                              style={{ top: `${(quarter * HOUR_HEIGHT) / 4}px` }}
+                            />
+                          );
+                        })}
                         {Array.from({ length: HOURS_IN_DAY + 1 }).map((_, hour) => (
                           <div
                             key={hour}
