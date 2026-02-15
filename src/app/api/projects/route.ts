@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createProject, listProjects, updateProject } from "@/lib/manualTimeEntriesStore";
 import { requireSignedInOrThrow } from "@/lib/authorization";
-import { DEFAULT_PROJECT_COLOR } from "@/lib/projectColors";
+import { assignUniquePastelColors, DEFAULT_PROJECT_COLOR } from "@/lib/projectColors";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -20,11 +20,18 @@ type UpdateProjectBody = {
 export async function GET() {
   try {
     const projects = await listProjects();
+    const colorByKey = assignUniquePastelColors(
+      projects.map((project) => ({
+        key: project.project_key,
+        name: project.project_name,
+        color: project.project_color ?? null,
+      }))
+    );
     return NextResponse.json({
       projects: projects.map((project) => ({
         key: project.project_key,
         name: project.project_name,
-        color: project.project_color || DEFAULT_PROJECT_COLOR,
+        color: colorByKey.get(project.project_key) || project.project_color || DEFAULT_PROJECT_COLOR,
         totalSeconds: project.total_seconds ?? 0,
         entryCount: project.entry_count ?? 0,
       })),

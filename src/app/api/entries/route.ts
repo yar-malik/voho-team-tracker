@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canonicalizeMemberName, namesMatch } from "@/lib/memberNames";
 import { listMembers } from "@/lib/manualTimeEntriesStore";
+import { assignUniquePastelColors } from "@/lib/projectColors";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -95,10 +96,7 @@ async function readStoredEntries(member: string, startIso: string, endIso: strin
   );
   const projectMetaByKey = new Map<string, { name: string; color: string | null }>();
   if (projectKeys.length > 0) {
-    const projectFilter = `in.(${projectKeys.map((key) => `"${key.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`).join(",")})`;
-    const projectsUrl =
-      `${base}/rest/v1/projects?select=project_key,project_name,project_color` +
-      `&project_key=${encodeURIComponent(projectFilter)}`;
+    const projectsUrl = `${base}/rest/v1/projects?select=project_key,project_name,project_color&order=project_name.asc`;
     const projectsResponse = await fetch(projectsUrl, {
       method: "GET",
       headers: supabaseHeaders(),
@@ -110,9 +108,20 @@ async function readStoredEntries(member: string, startIso: string, endIso: strin
         project_name: string;
         project_color?: string | null;
       }>;
+      const colorByKey = assignUniquePastelColors(
+        projectRows.map((row) => ({
+          key: row.project_key,
+          name: row.project_name,
+          color: row.project_color ?? null,
+        }))
+      );
+      const required = new Set(projectKeys);
       for (const row of projectRows) {
-        if (!row.project_key) continue;
-        projectMetaByKey.set(row.project_key, { name: row.project_name, color: row.project_color ?? null });
+        if (!row.project_key || !required.has(row.project_key)) continue;
+        projectMetaByKey.set(row.project_key, {
+          name: row.project_name,
+          color: colorByKey.get(row.project_key) ?? row.project_color ?? null,
+        });
       }
     }
   }

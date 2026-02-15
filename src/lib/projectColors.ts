@@ -44,6 +44,67 @@ export function getProjectBaseColor(projectName: string, explicitColor?: string 
   return PALETTE_SET.has(hashed.toUpperCase()) ? hashed : DEFAULT_PROJECT_COLOR;
 }
 
+type UniqueColorProject = {
+  key: string;
+  name: string;
+  color?: string | null;
+};
+
+function normalizePaletteColor(color?: string | null): string | null {
+  const raw = color?.trim() ?? "";
+  if (!/^#[0-9a-fA-F]{6}$/.test(raw)) return null;
+  const normalized = raw.toUpperCase();
+  if (!PALETTE_SET.has(normalized)) return null;
+  return normalized;
+}
+
+// Assign each project a stable, unique pastel color (when project count <= palette size).
+export function assignUniquePastelColors(projects: UniqueColorProject[]): Map<string, string> {
+  const palette = [...PROJECT_PASTEL_HEX].map((item) => item.toUpperCase());
+  const sorted = [...projects].sort((a, b) => {
+    const aName = a.name.trim().toLowerCase();
+    const bName = b.name.trim().toLowerCase();
+    if (aName === bName) return a.key.localeCompare(b.key);
+    return aName.localeCompare(bName);
+  });
+
+  const used = new Set<string>();
+  const result = new Map<string, string>();
+
+  // Keep explicit palette colors only if unique.
+  for (const project of sorted) {
+    const explicit = normalizePaletteColor(project.color);
+    if (!explicit || used.has(explicit)) continue;
+    result.set(project.key, explicit);
+    used.add(explicit);
+  }
+
+  // Fill remaining projects with deterministic unique colors.
+  for (const project of sorted) {
+    if (result.has(project.key)) continue;
+    if (palette.length === 0) {
+      result.set(project.key, DEFAULT_PROJECT_COLOR.toUpperCase());
+      continue;
+    }
+    const seed = `${project.name.trim().toLowerCase()}::${project.key}`;
+    const startIndex = hashText(seed) % palette.length;
+    let picked: string | null = null;
+    for (let offset = 0; offset < palette.length; offset += 1) {
+      const candidate = palette[(startIndex + offset) % palette.length];
+      if (!used.has(candidate)) {
+        picked = candidate;
+        break;
+      }
+    }
+    // If projects exceed palette size, reuse deterministic fallback.
+    if (!picked) picked = palette[startIndex];
+    result.set(project.key, picked);
+    used.add(picked);
+  }
+
+  return result;
+}
+
 export function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
   const normalized = hex.trim();
   if (!/^#[0-9a-fA-F]{6}$/.test(normalized)) return null;
