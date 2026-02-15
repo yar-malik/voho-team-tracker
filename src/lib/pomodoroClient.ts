@@ -281,3 +281,38 @@ export function updatePomodoroSession(
     ),
   };
 }
+
+export function addManualPomodoroSession(
+  state: PomodoroState,
+  input: {
+    endedAtIso: string;
+    focus?: string;
+    done?: string;
+    interruptions?: number;
+    durationSeconds?: number;
+  }
+): PomodoroState {
+  const endedAtDate = new Date(input.endedAtIso);
+  const safeEndedAt = Number.isNaN(endedAtDate.getTime()) ? new Date() : endedAtDate;
+  const durationSeconds = Math.max(60, Math.floor(Number(input.durationSeconds ?? DEFAULT_POMODORO_SECONDS)));
+  const startedAt = new Date(safeEndedAt.getTime() - durationSeconds * 1000);
+  const dayKey = getPomodoroDayKey(safeEndedAt);
+  const nextSession: PomodoroSession = {
+    id: `pomodoro-${safeEndedAt.getTime()}-${Math.random().toString(36).slice(2, 8)}`,
+    dayKey,
+    startedAt: startedAt.toISOString(),
+    endedAt: safeEndedAt.toISOString(),
+    durationSeconds,
+    interruptions: Math.max(0, Math.floor(Number(input.interruptions ?? 0))),
+    focus: (input.focus ?? "").trim(),
+    done: (input.done ?? "").trim(),
+  };
+  return {
+    ...state,
+    sessions: [nextSession, ...state.sessions].slice(0, 500),
+    completionsByDay: {
+      ...state.completionsByDay,
+      [dayKey]: (state.completionsByDay[dayKey] ?? 0) + 1,
+    },
+  };
+}

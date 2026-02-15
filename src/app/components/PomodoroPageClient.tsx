@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  addManualPomodoroSession,
   completePomodoro,
   formatPomodoroTimer,
   getPomodoroDayKey,
@@ -30,6 +31,20 @@ export default function PomodoroPageClient() {
     activeSessionId: null,
     updatedAt: Date.now(),
   });
+  const [manualEndedAt, setManualEndedAt] = useState(() => {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+    const dd = String(now.getDate()).padStart(2, "0");
+    const hh = String(now.getHours()).padStart(2, "0");
+    const min = String(now.getMinutes()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+  });
+  const [manualFocus, setManualFocus] = useState("");
+  const [manualDone, setManualDone] = useState("");
+  const [manualInterruptions, setManualInterruptions] = useState("0");
+  const [manualDurationMinutes, setManualDurationMinutes] = useState("25");
+  const [manualError, setManualError] = useState<string | null>(null);
 
   useEffect(() => {
     const restored = readPomodoroState();
@@ -150,6 +165,103 @@ export default function PomodoroPageClient() {
             ))}
           </tbody>
         </table>
+      </div>
+
+      <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Add Manual Pomodoro</p>
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          <label className="text-sm text-slate-700">
+            Ended at
+            <input
+              type="datetime-local"
+              value={manualEndedAt}
+              onChange={(event) => setManualEndedAt(event.target.value)}
+              className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5"
+            />
+          </label>
+          <label className="text-sm text-slate-700">
+            Duration (minutes)
+            <input
+              type="number"
+              min={1}
+              value={manualDurationMinutes}
+              onChange={(event) => setManualDurationMinutes(event.target.value)}
+              className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5"
+            />
+          </label>
+          <label className="text-sm text-slate-700">
+            Focus
+            <input
+              type="text"
+              value={manualFocus}
+              onChange={(event) => setManualFocus(event.target.value)}
+              placeholder="What was your focus?"
+              className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5"
+            />
+          </label>
+          <label className="text-sm text-slate-700">
+            What was done
+            <input
+              type="text"
+              value={manualDone}
+              onChange={(event) => setManualDone(event.target.value)}
+              placeholder="What did you complete?"
+              className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5"
+            />
+          </label>
+          <label className="text-sm text-slate-700">
+            Interruptions
+            <input
+              type="number"
+              min={0}
+              value={manualInterruptions}
+              onChange={(event) => setManualInterruptions(event.target.value)}
+              className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5"
+            />
+          </label>
+        </div>
+        {manualError && <p className="mt-2 text-xs text-rose-600">{manualError}</p>}
+        <div className="mt-3">
+          <button
+            type="button"
+            onClick={() => {
+              const endedAtIso = new Date(manualEndedAt).toISOString();
+              const durationMinutes = Number(manualDurationMinutes);
+              const interruptions = Number(manualInterruptions);
+              if (!manualEndedAt || Number.isNaN(new Date(manualEndedAt).getTime())) {
+                setManualError("Please choose a valid end date/time.");
+                return;
+              }
+              if (!Number.isFinite(durationMinutes) || durationMinutes <= 0) {
+                setManualError("Duration must be greater than zero.");
+                return;
+              }
+              if (!Number.isFinite(interruptions) || interruptions < 0) {
+                setManualError("Interruptions must be 0 or more.");
+                return;
+              }
+              setManualError(null);
+              setPomodoroState((prev) => {
+                const next = addManualPomodoroSession(prev, {
+                  endedAtIso,
+                  durationSeconds: Math.round(durationMinutes * 60),
+                  focus: manualFocus,
+                  done: manualDone,
+                  interruptions,
+                });
+                writePomodoroState(next, "pomodoro-page");
+                return next;
+              });
+              setManualFocus("");
+              setManualDone("");
+              setManualInterruptions("0");
+              setManualDurationMinutes("25");
+            }}
+            className="rounded-lg bg-[#0BA5E9] px-4 py-2 text-sm font-semibold text-white hover:bg-[#0994cf]"
+          >
+            Add manual pomodoro
+          </button>
+        </div>
       </div>
 
       <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
