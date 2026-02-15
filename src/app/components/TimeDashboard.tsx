@@ -467,6 +467,7 @@ export default function TimeDashboard({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<"member" | "team" | "all">("all");
+  const [allCalendarView, setAllCalendarView] = useState<"calendar" | "list" | "timesheet">("calendar");
   const [selectedEntry, setSelectedEntry] = useState<EntryModalData | null>(null);
   const [entryEditor, setEntryEditor] = useState<{
     description: string;
@@ -994,6 +995,32 @@ export default function TimeDashboard({
       ...buildTimelineBlocks(memberData.entries, date),
     }));
   }, [teamData, date, selectedMembers]);
+
+  const visibleTeamEntries = useMemo(() => {
+    if (!teamData) return [] as Array<{ memberName: string; entry: TimeEntry }>;
+    const allowed = new Set(selectedMembers);
+    const rows: Array<{ memberName: string; entry: TimeEntry }> = [];
+    for (const memberData of teamData.members) {
+      if (!allowed.has(memberData.name)) continue;
+      for (const entry of memberData.entries) {
+        rows.push({ memberName: memberData.name, entry });
+      }
+    }
+    return rows.sort((a, b) => new Date(a.entry.start).getTime() - new Date(b.entry.start).getTime());
+  }, [teamData, selectedMembers]);
+
+  const visibleTeamTotals = useMemo(() => {
+    if (!teamData) return [] as Array<{ memberName: string; seconds: number; entries: number }>;
+    const allowed = new Set(selectedMembers);
+    const rows = teamData.members
+      .filter((memberData) => allowed.has(memberData.name))
+      .map((memberData) => ({
+        memberName: memberData.name,
+        seconds: memberData.entries.reduce((sum, entry) => sum + getEntrySeconds(entry), 0),
+        entries: memberData.entries.length,
+      }));
+    return rows.sort((a, b) => b.seconds - a.seconds);
+  }, [teamData, selectedMembers]);
 
   const memberWeekSeries = useMemo(() => {
     if (!teamWeekData || !member) return [] as Array<{ date: string; seconds: number }>;
@@ -1747,7 +1774,8 @@ export default function TimeDashboard({
             <p className="text-sm text-slate-500">
               One shared daily timeline for everyone. Matching vertical positions indicate overlap.
             </p>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
               <div className="relative w-full max-w-xs" ref={memberPickerRef}>
                 <button
                   type="button"
@@ -1827,6 +1855,36 @@ export default function TimeDashboard({
                 tabIndex={-1}
                 aria-hidden="true"
               />
+              </div>
+              <div className="inline-flex rounded-xl border border-slate-300 bg-white p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setAllCalendarView("calendar")}
+                  className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${
+                    allCalendarView === "calendar" ? "bg-sky-100 text-sky-800" : "text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  Calendar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAllCalendarView("list")}
+                  className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${
+                    allCalendarView === "list" ? "bg-sky-100 text-sky-800" : "text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  List view
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAllCalendarView("timesheet")}
+                  className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${
+                    allCalendarView === "timesheet" ? "bg-sky-100 text-sky-800" : "text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  Timesheet
+                </button>
+              </div>
             </div>
             <div className="mt-3 grid grid-cols-[3.5rem_1fr] items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
               <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Activity</div>
@@ -1835,7 +1893,9 @@ export default function TimeDashboard({
                 <p className="text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">{liveClockLabel}</p>
               </div>
             </div>
-            <div ref={allCalendarsScrollRef} className="mt-4 max-h-[72vh] overflow-auto">
+            {allCalendarView === "calendar" && (
+            <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_280px]">
+            <div ref={allCalendarsScrollRef} className="max-h-[72vh] overflow-auto">
               <div className="grid min-w-[760px] grid-cols-[3.5rem_1fr] gap-2">
                 <div className="relative" style={{ height: `${HOURS_IN_DAY * HOUR_HEIGHT}px` }}>
                   {Array.from({ length: HOURS_IN_DAY + 1 }).map((_, hour) => (
@@ -1975,6 +2035,89 @@ export default function TimeDashboard({
                 </div>
               </div>
             </div>
+            <aside className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-slate-800">Goals</h3>
+                <button
+                  type="button"
+                  className="rounded-md px-2 py-1 text-sm font-semibold text-[#0BA5E9] hover:bg-sky-100"
+                >
+                  +
+                </button>
+              </div>
+              <button
+                type="button"
+                className="mt-4 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.1em] text-[#0BA5E9] hover:bg-sky-50"
+              >
+                Create a goal
+              </button>
+            </aside>
+            </div>
+            )}
+            {allCalendarView === "list" && (
+              <div className="mt-4 max-h-[72vh] overflow-auto rounded-xl border border-slate-200">
+                <table className="min-w-full text-sm">
+                  <thead className="sticky top-0 bg-slate-50">
+                    <tr className="border-b border-slate-200 text-left text-slate-600">
+                      <th className="px-3 py-2 font-semibold">Member</th>
+                      <th className="px-3 py-2 font-semibold">Description</th>
+                      <th className="px-3 py-2 font-semibold">Project</th>
+                      <th className="px-3 py-2 font-semibold">Time</th>
+                      <th className="px-3 py-2 font-semibold">Duration</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleTeamEntries.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="px-3 py-4 text-slate-500">
+                          No entries for selected calendars.
+                        </td>
+                      </tr>
+                    )}
+                    {visibleTeamEntries.map(({ memberName, entry }) => (
+                      <tr key={`${memberName}-${entry.id}-${entry.start}`} className="border-b border-slate-100">
+                        <td className="px-3 py-2 text-slate-800">{memberName}</td>
+                        <td className="px-3 py-2 text-slate-800">{entry.description?.trim() || "(No description)"}</td>
+                        <td className="px-3 py-2 text-slate-700">{entry.project_name?.trim() || "No project"}</td>
+                        <td className="px-3 py-2 text-slate-700">
+                          {formatTime(entry.start)} - {formatTime(entry.stop)}
+                        </td>
+                        <td className="px-3 py-2 font-medium text-slate-900">{formatDuration(getEntrySeconds(entry))}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {allCalendarView === "timesheet" && (
+              <div className="mt-4 max-h-[72vh] overflow-auto rounded-xl border border-slate-200">
+                <table className="min-w-full text-sm">
+                  <thead className="sticky top-0 bg-slate-50">
+                    <tr className="border-b border-slate-200 text-left text-slate-600">
+                      <th className="px-3 py-2 font-semibold">Member</th>
+                      <th className="px-3 py-2 font-semibold">Entries</th>
+                      <th className="px-3 py-2 font-semibold">Total time</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleTeamTotals.length === 0 && (
+                      <tr>
+                        <td colSpan={3} className="px-3 py-4 text-slate-500">
+                          No data for selected calendars.
+                        </td>
+                      </tr>
+                    )}
+                    {visibleTeamTotals.map((row) => (
+                      <tr key={row.memberName} className="border-b border-slate-100">
+                        <td className="px-3 py-2 text-slate-800">{row.memberName}</td>
+                        <td className="px-3 py-2 text-slate-700">{row.entries}</td>
+                        <td className="px-3 py-2 font-semibold text-slate-900">{formatDuration(row.seconds)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
           )}
 
