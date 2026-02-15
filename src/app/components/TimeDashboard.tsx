@@ -1455,6 +1455,23 @@ export default function TimeDashboard({
                             title={`${row.name} • Total hours worked: ${formatDuration(row.seconds)}${
                               row.isRunning ? " • Running now" : ""
                             }`}
+                            onMouseEnter={(event) =>
+                              placeHoverTooltip(
+                                event,
+                                `${row.name}\nTotal hours worked: ${formatDuration(row.seconds)}${
+                                  row.isRunning ? "\nStatus: Running" : ""
+                                }`
+                              )
+                            }
+                            onMouseMove={(event) =>
+                              placeHoverTooltip(
+                                event,
+                                `${row.name}\nTotal hours worked: ${formatDuration(row.seconds)}${
+                                  row.isRunning ? "\nStatus: Running" : ""
+                                }`
+                              )
+                            }
+                            onMouseLeave={hideHoverTooltip}
                           />
                           <p className="w-full truncate text-center text-[11px] font-semibold text-slate-700">{row.name}</p>
                         </div>
