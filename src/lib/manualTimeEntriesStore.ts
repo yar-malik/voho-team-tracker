@@ -38,6 +38,7 @@ export type StoredProject = {
   project_id: number;
   project_name: string;
   project_color: string;
+  project_type: "work" | "non_work";
   total_seconds?: number;
   entry_count?: number;
 };
@@ -127,6 +128,7 @@ async function ensureManualProject(projectName: string | null): Promise<EnsurePr
       project_id: projectId,
       project_name: normalized,
       project_color: DEFAULT_PROJECT_COLOR,
+      project_type: "work",
       created_at: nowIso,
       updated_at: nowIso,
     },
@@ -151,7 +153,7 @@ export async function listProjects(): Promise<StoredProject[]> {
   if (!isSupabaseConfigured()) return [];
   const [projectsResponse, aliasesResponse, rollupsResponse] = await Promise.all([
     fetch(
-      `${getBaseUrl()}/rest/v1/projects?select=project_key,workspace_id,project_id,project_name,project_color&order=project_name.asc`,
+      `${getBaseUrl()}/rest/v1/projects?select=project_key,workspace_id,project_id,project_name,project_color,project_type&order=project_name.asc`,
       {
         method: "GET",
         headers: supabaseHeaders(),
@@ -209,6 +211,7 @@ export async function listProjects(): Promise<StoredProject[]> {
         canonical.set(canonicalKey, {
           ...canonicalRow,
           project_color: canonicalRow.project_color || DEFAULT_PROJECT_COLOR,
+          project_type: canonicalRow.project_type === "non_work" ? "non_work" : "work",
           total_seconds: rollup?.totalSeconds ?? 0,
           entry_count: rollup?.entryCount ?? 0,
         });
@@ -226,6 +229,9 @@ export async function listProjects(): Promise<StoredProject[]> {
     }
     existing.total_seconds = (existing.total_seconds ?? 0) + (project.total_seconds ?? 0);
     existing.entry_count = (existing.entry_count ?? 0) + (project.entry_count ?? 0);
+    if (existing.project_type !== "work" && project.project_type === "work") {
+      existing.project_type = "work";
+    }
     if (!existing.project_color && project.project_color) {
       existing.project_color = project.project_color;
     }
@@ -234,7 +240,11 @@ export async function listProjects(): Promise<StoredProject[]> {
   return Array.from(byName.values()).sort((a, b) => a.project_name.localeCompare(b.project_name));
 }
 
-export async function createProject(projectName: string, projectColor?: string | null) {
+export async function createProject(
+  projectName: string,
+  projectColor?: string | null,
+  projectType: "work" | "non_work" = "work"
+) {
   const normalized = normalizeProjectName(projectName);
   if (!normalized) {
     throw new Error("Project name is required");
@@ -256,14 +266,30 @@ export async function createProject(projectName: string, projectColor?: string |
       finalColor = normalizedColor;
     }
   }
+  let finalType: "work" | "non_work" = "work";
+  if (projectType === "non_work") {
+    const updated = await updateProject({ key: projectKey, projectType: "non_work" });
+    finalType = updated.projectType;
+  }
   return {
     projectKey,
     projectName: savedName,
     projectColor: finalColor,
+    projectType: finalType,
   };
 }
 
-export async function updateProject(input: { key: string; name?: string | null; color?: string | null }) {
+export async function updateProject(input: {
+  key: string;
+  name?: string | null;
+  color?: string | null;
+  projectType?: "work" | "non_work" | null;
+}): Promise<{
+  projectKey: string;
+  projectName: string;
+  projectColor: string;
+  projectType: "work" | "non_work";
+}> {
   const key = input.key.trim();
   if (!key) throw new Error("Project key is required");
 
@@ -279,6 +305,12 @@ export async function updateProject(input: { key: string; name?: string | null; 
       throw new Error("Invalid project color");
     }
     patch.project_color = normalizedColor.toUpperCase();
+  }
+  if (typeof input.projectType === "string") {
+    if (input.projectType !== "work" && input.projectType !== "non_work") {
+      throw new Error("Invalid project type");
+    }
+    patch.project_type = input.projectType;
   }
   if (Object.keys(patch).length === 0) {
     throw new Error("Nothing to update");
@@ -298,6 +330,7 @@ export async function updateProject(input: { key: string; name?: string | null; 
     project_key: string;
     project_name: string;
     project_color?: string;
+    project_type?: "work" | "non_work";
   }>;
   const row = rows[0];
   if (!row) throw new Error("Project not found");
@@ -305,6 +338,7 @@ export async function updateProject(input: { key: string; name?: string | null; 
     projectKey: row.project_key,
     projectName: row.project_name,
     projectColor: row.project_color ?? DEFAULT_PROJECT_COLOR,
+    projectType: row.project_type === "non_work" ? "non_work" : "work",
   };
 }
 

@@ -17,6 +17,7 @@ type StoredEntry = {
   tags: string[];
   project_name: string | null;
   project_color: string | null;
+  project_type: "work" | "non_work";
 };
 
 type EntriesPayload = {
@@ -70,6 +71,10 @@ function buildUtcDayRange(dateInput: string, tzOffsetMinutes: number) {
   return { startDate: new Date(startMs).toISOString(), endDate: new Date(endMs).toISOString() };
 }
 
+function isNonWorkProjectType(projectType: string | null | undefined) {
+  return (projectType ?? "").toLowerCase() === "non_work";
+}
+
 async function readStoredEntries(member: string, startIso: string, endIso: string): Promise<EntriesPayload | null> {
   if (!isSupabaseConfigured()) return null;
   const base = process.env.SUPABASE_URL!;
@@ -94,9 +99,9 @@ async function readStoredEntries(member: string, startIso: string, endIso: strin
   const projectKeys = Array.from(
     new Set(rows.map((row) => row.project_key).filter((value): value is string => typeof value === "string" && value.length > 0))
   );
-  const projectMetaByKey = new Map<string, { name: string; color: string | null }>();
+  const projectMetaByKey = new Map<string, { name: string; color: string | null; type: "work" | "non_work" }>();
   if (projectKeys.length > 0) {
-    const projectsUrl = `${base}/rest/v1/projects?select=project_key,project_name,project_color&order=project_name.asc`;
+    const projectsUrl = `${base}/rest/v1/projects?select=project_key,project_name,project_color,project_type&order=project_name.asc`;
     const projectsResponse = await fetch(projectsUrl, {
       method: "GET",
       headers: supabaseHeaders(),
@@ -107,6 +112,7 @@ async function readStoredEntries(member: string, startIso: string, endIso: strin
         project_key: string;
         project_name: string;
         project_color?: string | null;
+        project_type?: "work" | "non_work";
       }>;
       const colorByKey = assignUniquePastelColors(
         projectRows.map((row) => ({
@@ -121,6 +127,7 @@ async function readStoredEntries(member: string, startIso: string, endIso: strin
         projectMetaByKey.set(row.project_key, {
           name: row.project_name,
           color: colorByKey.get(row.project_key) ?? row.project_color ?? null,
+          type: row.project_type === "non_work" ? "non_work" : "work",
         });
       }
     }
@@ -137,6 +144,7 @@ async function readStoredEntries(member: string, startIso: string, endIso: strin
       tags: row.tags ?? [],
       project_name: projectMeta?.name ?? null,
       project_color: projectMeta?.color ?? null,
+      project_type: projectMeta?.type ?? "work",
     };
   });
 
@@ -153,9 +161,12 @@ async function readStoredEntries(member: string, startIso: string, endIso: strin
         tags: row.tags ?? [],
         project_name: row.project_key ? projectMetaByKey.get(row.project_key)?.name ?? null : null,
         project_color: row.project_key ? projectMetaByKey.get(row.project_key)?.color ?? null : null,
+        project_type: row.project_key ? projectMetaByKey.get(row.project_key)?.type ?? "work" : "work",
       }))[0] ?? null;
 
-  const totalSeconds = entries.reduce((acc, entry) => acc + Math.max(0, entry.duration), 0);
+  const totalSeconds = entries
+    .filter((entry) => !isNonWorkProjectType(entry.project_type))
+    .reduce((acc, entry) => acc + Math.max(0, entry.duration), 0);
   const cachedAt = rows.reduce((latest, row) => (row.synced_at > latest ? row.synced_at : latest), rows[0].synced_at);
 
   return {

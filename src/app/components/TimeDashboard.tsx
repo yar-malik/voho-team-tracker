@@ -15,6 +15,7 @@ type TimeEntry = {
   project_id?: number | null;
   project_name?: string | null;
   project_color?: string | null;
+  project_type?: "work" | "non_work";
   tags?: string[] | null;
 };
 
@@ -293,14 +294,15 @@ function getClosedEntryRange(entry: TimeEntry): { startMs: number; endMs: number
   return { startMs, endMs, seconds: Math.max(0, seconds) };
 }
 
-function isExcludedFromRanking(projectName: string | null | undefined) {
+function isExcludedFromRanking(projectType: string | null | undefined, projectName: string | null | undefined) {
+  if ((projectType ?? "").toLowerCase() === "non_work") return true;
   return (projectName ?? "").trim().toLowerCase() === EXCLUDED_PROJECT_NAME;
 }
 
 function buildTeamRanking(members: TeamMemberData[]): TeamRankingRow[] {
   const rows = members.map((member) => {
     const closedRanges = member.entries
-      .filter((entry) => !isExcludedFromRanking(entry.project_name))
+      .filter((entry) => !isExcludedFromRanking(entry.project_type, entry.project_name))
       .map(getClosedEntryRange)
       .filter((item): item is NonNullable<typeof item> => item !== null)
       .sort((a, b) => a.startMs - b.startMs);
@@ -1017,7 +1019,7 @@ export default function TimeDashboard({
         return selectedMembersLower.has(memberData.name.trim().toLowerCase());
       })
       .map((memberData) => {
-        const cardEntries = memberData.entries.filter((entry) => !isExcludedFromRanking(entry.project_name));
+        const cardEntries = memberData.entries.filter((entry) => !isExcludedFromRanking(entry.project_type, entry.project_name));
         const cardTotalSeconds = cardEntries.reduce((sum, entry) => sum + getEntrySeconds(entry), 0);
         const isRunning = Boolean(memberData.current ?? cardEntries.find((entry) => entry.stop === null));
         return {
@@ -1790,7 +1792,7 @@ export default function TimeDashboard({
                     return a.name.localeCompare(b.name);
                   })
                   .map((memberData) => {
-                  const cardEntries = memberData.entries.filter((entry) => !isExcludedFromRanking(entry.project_name));
+                  const cardEntries = memberData.entries.filter((entry) => !isExcludedFromRanking(entry.project_type, entry.project_name));
                   const running = memberData.current ?? cardEntries.find((entry) => entry.stop === null) ?? null;
                   const memberSummary = buildTaskProjectSummary(cardEntries).slice(0, 4);
                   const lastActivityMs = cardEntries.reduce((latest, entry) => {

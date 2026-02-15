@@ -10,6 +10,7 @@ export default async function ProjectsPage() {
         key: p.project_key,
         name: p.project_name,
         color: p.project_color || DEFAULT_PROJECT_COLOR,
+        projectType: p.project_type ?? "work",
         totalSeconds: p.total_seconds ?? 0,
         entryCount: p.entry_count ?? 0,
       }))}

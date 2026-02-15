@@ -7,6 +7,7 @@ type Project = {
   key: string;
   name: string;
   color: string;
+  projectType: "work" | "non_work";
   totalSeconds: number;
   entryCount: number;
 };
@@ -15,6 +16,7 @@ type EditModalState = {
   key: string;
   name: string;
   color: string;
+  projectType: "work" | "non_work";
 };
 
 function formatHours(totalSeconds: number) {
@@ -85,6 +87,23 @@ function ProjectModal({
           </label>
 
           <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Project type</p>
+            <select
+              value={state.projectType}
+              onChange={(event) =>
+                onChange({
+                  ...state,
+                  projectType: event.target.value === "non_work" ? "non_work" : "work",
+                })
+              }
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+            >
+              <option value="work">Work</option>
+              <option value="non_work">Non-Work</option>
+            </select>
+          </div>
+
+          <div>
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Project color</p>
             <div className="inline-grid grid-cols-5 gap-2 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-8">
               {PROJECT_PASTEL_HEX.map((color) => {
@@ -146,7 +165,7 @@ export default function ProjectsPageClient({ initialProjects }: { initialProject
           <h1 className="text-3xl font-semibold text-slate-900">Projects</h1>
           <button
             type="button"
-            onClick={() => setCreating({ key: "", name: "", color: DEFAULT_PROJECT_COLOR })}
+            onClick={() => setCreating({ key: "", name: "", color: DEFAULT_PROJECT_COLOR, projectType: "work" })}
             className="rounded-xl bg-[#0BA5E9] px-4 py-2 text-sm font-semibold text-white hover:bg-[#0994cf]"
           >
             + New project
@@ -174,6 +193,7 @@ export default function ProjectsPageClient({ initialProjects }: { initialProject
           <thead className="border-y border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
             <tr>
               <th className="px-6 py-3">Project</th>
+              <th className="px-6 py-3">Type</th>
               <th className="px-6 py-3">Time status</th>
               <th className="px-6 py-3">Entries</th>
               <th className="px-6 py-3 text-right">Edit</th>
@@ -184,15 +204,23 @@ export default function ProjectsPageClient({ initialProjects }: { initialProject
               <tr
                 key={project.key}
                 className="cursor-pointer border-b border-slate-100 hover:bg-slate-50"
-                onClick={() => setEditing({ key: project.key, name: project.name, color: normalizeColor(project.color || DEFAULT_PROJECT_COLOR) })}
+                onClick={() =>
+                  setEditing({
+                    key: project.key,
+                    name: project.name,
+                    color: normalizeColor(project.color || DEFAULT_PROJECT_COLOR),
+                    projectType: project.projectType ?? "work",
+                  })
+                }
               >
                 <td className="px-6 py-3">
                   <div className="inline-flex items-center gap-2 text-base font-medium text-slate-900">
                     <span className="inline-block h-3.5 w-3.5 rounded-full" style={{ backgroundColor: normalizeColor(project.color) }} />
-                    
+
                     {project.name}
                   </div>
                 </td>
+                <td className="px-6 py-3 text-slate-600">{project.projectType === "non_work" ? "Non-Work" : "Work"}</td>
                 <td className="px-6 py-3 text-slate-600">{formatHours(project.totalSeconds || 0)}</td>
                 <td className="px-6 py-3 text-slate-600">{project.entryCount || 0}</td>
                 <td className="px-6 py-3 text-right">
@@ -200,7 +228,12 @@ export default function ProjectsPageClient({ initialProjects }: { initialProject
                     type="button"
                     onClick={(event) => {
                       event.stopPropagation();
-                      setEditing({ key: project.key, name: project.name, color: normalizeColor(project.color || DEFAULT_PROJECT_COLOR) });
+                      setEditing({
+                        key: project.key,
+                        name: project.name,
+                        color: normalizeColor(project.color || DEFAULT_PROJECT_COLOR),
+                        projectType: project.projectType ?? "work",
+                      });
                     }}
                     aria-label={`Edit ${project.name}`}
                     className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100"
@@ -212,7 +245,7 @@ export default function ProjectsPageClient({ initialProjects }: { initialProject
             ))}
             {sortedProjects.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-6 py-12 text-center text-slate-500">
+                <td colSpan={5} className="px-6 py-12 text-center text-slate-500">
                   No projects yet.
                 </td>
               </tr>
@@ -239,18 +272,28 @@ export default function ProjectsPageClient({ initialProjects }: { initialProject
               const res = await fetch("/api/projects", {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ key: editing.key, name: editing.name, color: normalizeColor(editing.color) }),
+                body: JSON.stringify({
+                  key: editing.key,
+                  name: editing.name,
+                  color: normalizeColor(editing.color),
+                  projectType: editing.projectType,
+                }),
               });
               const data = (await res.json()) as {
                 error?: string;
-                project?: { key: string; name: string; color: string };
+                project?: { key: string; name: string; color: string; projectType: "work" | "non_work" };
               };
               if (!res.ok || data.error) throw new Error(data.error || "Failed to update project");
               if (data.project) {
                 setProjects((prev) =>
                   prev.map((project) =>
                     project.key === data.project!.key
-                      ? { ...project, name: data.project!.name, color: normalizeColor(data.project!.color) }
+                      ? {
+                          ...project,
+                          name: data.project!.name,
+                          color: normalizeColor(data.project!.color),
+                          projectType: data.project!.projectType ?? "work",
+                        }
                       : project
                   )
                 );
@@ -283,14 +326,22 @@ export default function ProjectsPageClient({ initialProjects }: { initialProject
               const res = await fetch("/api/projects", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ name: creating.name, color: normalizeColor(creating.color) }),
+                body: JSON.stringify({
+                  name: creating.name,
+                  color: normalizeColor(creating.color),
+                  projectType: creating.projectType,
+                }),
               });
               const data = (await res.json()) as { error?: string; project?: Project };
               if (!res.ok || data.error) throw new Error(data.error || "Failed to create project");
               if (data.project) {
                 setProjects((prev) => [
                   ...prev.filter((p) => p.key !== data.project!.key),
-                  { ...data.project!, color: normalizeColor(data.project!.color) },
+                  {
+                    ...data.project!,
+                    color: normalizeColor(data.project!.color),
+                    projectType: data.project!.projectType ?? "work",
+                  },
                 ]);
               }
               setCreating(null);

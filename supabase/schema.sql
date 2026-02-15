@@ -38,6 +38,7 @@ create table if not exists public.projects (
   project_id bigint not null,
   project_name text not null,
   project_color text not null default '#0EA5E9',
+  project_type text not null default 'work',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

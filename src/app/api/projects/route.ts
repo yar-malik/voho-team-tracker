@@ -9,12 +9,14 @@ export const revalidate = 0;
 type CreateProjectBody = {
   name?: string;
   color?: string;
+  projectType?: "work" | "non_work";
 };
 
 type UpdateProjectBody = {
   key?: string;
   name?: string;
   color?: string;
+  projectType?: "work" | "non_work";
 };
 
 export async function GET() {
@@ -25,6 +27,7 @@ export async function GET() {
         key: project.project_key,
         name: project.project_name,
         color: project.project_color ?? null,
+        projectType: project.project_type ?? "work",
       }))
     );
     return NextResponse.json({
@@ -32,6 +35,7 @@ export async function GET() {
         key: project.project_key,
         name: project.project_name,
         color: colorByKey.get(project.project_key) || project.project_color || DEFAULT_PROJECT_COLOR,
+        projectType: project.project_type ?? "work",
         totalSeconds: project.total_seconds ?? 0,
         entryCount: project.entry_count ?? 0,
       })),
@@ -58,13 +62,15 @@ export async function POST(request: NextRequest) {
 
   try {
     await requireSignedInOrThrow();
-    const project = await createProject(name, body.color ?? null);
+    const projectType = body.projectType === "non_work" ? "non_work" : "work";
+    const project = await createProject(name, body.color ?? null, projectType);
     return NextResponse.json({
       ok: true,
       project: {
         key: project.projectKey,
         name: project.projectName,
         color: project.projectColor,
+        projectType: project.projectType,
       },
       source: "db",
     });
@@ -94,6 +100,7 @@ export async function PATCH(request: NextRequest) {
       key,
       name: body.name ?? null,
       color: body.color ?? null,
+      projectType: body.projectType ?? null,
     });
     return NextResponse.json({
       ok: true,
@@ -101,6 +108,7 @@ export async function PATCH(request: NextRequest) {
         key: updated.projectKey,
         name: updated.projectName,
         color: updated.projectColor,
+        projectType: updated.projectType,
       },
       source: "db",
     });

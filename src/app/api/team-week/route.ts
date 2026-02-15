@@ -21,6 +21,19 @@ type MemberWeekPayload = {
 };
 
 type StoredStatRow = {
+  member_name: string;
+  start_at: string;
+  duration_seconds: number;
+  project_key: string | null;
+  synced_at: string;
+};
+
+type StoredProjectRow = {
+  project_key: string;
+  project_type?: "work" | "non_work";
+};
+
+type ComputedRow = {
   stat_date: string;
   member_name: string;
   total_seconds: number;
@@ -68,11 +81,11 @@ async function readStoredWeek(
     .join(",");
   const memberFilter = `in.(${quotedMembers})`;
   const url =
-    `${base}/rest/v1/daily_member_stats` +
-    `?select=stat_date,member_name,total_seconds,entry_count,updated_at` +
+    `${base}/rest/v1/time_entries` +
+    `?select=member_name,start_at,duration_seconds,project_key,synced_at` +
     `&member_name=${encodeURIComponent(memberFilter)}` +
-    `&stat_date=gte.${encodeURIComponent(startDate)}` +
-    `&stat_date=lte.${encodeURIComponent(endDate)}`;
+    `&source_date=gte.${encodeURIComponent(startDate)}` +
+    `&source_date=lte.${encodeURIComponent(endDate)}`;
 
   const response = await fetch(url, {
     method: "GET",
@@ -81,6 +94,52 @@ async function readStoredWeek(
   });
   if (!response.ok) return null;
   const rows = (await response.json()) as StoredStatRow[];
+
+  const projectKeys = Array.from(
+    new Set(rows.map((row) => row.project_key).filter((value): value is string => typeof value === "string" && value.length > 0))
+  );
+  const projectTypeByKey = new Map<string, "work" | "non_work">();
+  if (projectKeys.length > 0) {
+    const projectFilter = `in.(${projectKeys.map((key) => `"${key.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`).join(",")})`;
+    const projectsUrl =
+      `${base}/rest/v1/projects?select=project_key,project_type` +
+      `&project_key=${encodeURIComponent(projectFilter)}`;
+    const projectsResponse = await fetch(projectsUrl, {
+      method: "GET",
+      headers: supabaseHeaders(),
+      cache: "no-store",
+    });
+    if (projectsResponse.ok) {
+      const projectRows = (await projectsResponse.json()) as StoredProjectRow[];
+      for (const row of projectRows) {
+        if (!row.project_key) continue;
+        projectTypeByKey.set(row.project_key, row.project_type === "non_work" ? "non_work" : "work");
+      }
+    }
+  }
+
+  const computedMap = new Map<string, ComputedRow>();
+  for (const row of rows) {
+    const projectType = row.project_key ? projectTypeByKey.get(row.project_key) ?? "work" : "work";
+    if (projectType === "non_work") continue;
+    const statDate = row.start_at.slice(0, 10);
+    const key = `${row.member_name}::${statDate}`;
+    const existing = computedMap.get(key);
+    if (existing) {
+      existing.total_seconds += Math.max(0, Number(row.duration_seconds ?? 0));
+      existing.entry_count += 1;
+      if (row.synced_at > existing.updated_at) existing.updated_at = row.synced_at;
+      continue;
+    }
+    computedMap.set(key, {
+      stat_date: statDate,
+      member_name: row.member_name,
+      total_seconds: Math.max(0, Number(row.duration_seconds ?? 0)),
+      entry_count: 1,
+      updated_at: row.synced_at,
+    });
+  }
+  const computedRows = Array.from(computedMap.values());
 
   const grouped = new Map<string, MemberWeekPayload>(
     members.map((member) => [
@@ -95,7 +154,7 @@ async function readStoredWeek(
   );
 
   let latestUpdatedAt: string | null = null;
-  for (const row of rows) {
+  for (const row of computedRows) {
     const updatedAt = row.updated_at;
     if (!latestUpdatedAt || new Date(updatedAt).getTime() > new Date(latestUpdatedAt).getTime()) {
       latestUpdatedAt = updatedAt;

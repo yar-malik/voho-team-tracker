@@ -6,7 +6,6 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const EXCLUDED_PROJECT_NAME = "non-work-task";
 const WORK_ITEM_LIMIT = 8;
 
 type DaySummary = {
@@ -51,6 +50,7 @@ type ProfileEntry = {
   start: string;
   durationSeconds: number;
   projectName: string | null;
+  projectType: "work" | "non_work";
 };
 
 type StoredTimeEntryRow = {
@@ -129,6 +129,10 @@ function buildAutoKpis(
 
 function normalizeMemberKey(value: string) {
   return value.trim().toLowerCase();
+}
+
+function isNonWorkProjectType(projectType: string | null | undefined) {
+  return (projectType ?? "").toLowerCase() === "non_work";
 }
 
 function parseCsvLine(line: string): string[] {
@@ -404,8 +408,8 @@ function buildProfilesFromEntries(
 
     for (const entry of entries) {
       if (entry.memberName !== member.name) continue;
+      if (isNonWorkProjectType(entry.projectType)) continue;
       const project = normalizeLabel(entry.projectName, "No project");
-      if (project.toLowerCase() === EXCLUDED_PROJECT_NAME) continue;
       const description = normalizeLabel(entry.description, "(No description)");
       const seconds = Math.max(0, entry.durationSeconds);
       const day = getDateKeyAtOffset(entry.start, tzOffsetMinutes);
@@ -506,11 +510,11 @@ async function readStoredEntries(
   const uniqueProjectKeys = Array.from(
     new Set(rows.map((row) => row.project_key).filter((value): value is string => typeof value === "string" && value.length > 0))
   );
-  const projectNameByKey = new Map<string, string>();
+  const projectByKey = new Map<string, { name: string; type: "work" | "non_work" }>();
   if (uniqueProjectKeys.length > 0) {
     const projectFilter = `in.(${uniqueProjectKeys.map((key) => `"${key.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`).join(",")})`;
     const projectsUrl =
-      `${base}/rest/v1/projects?select=project_key,project_name` +
+      `${base}/rest/v1/projects?select=project_key,project_name,project_type` +
       `&project_key=${encodeURIComponent(projectFilter)}`;
     const projectsResponse = await fetch(projectsUrl, {
       method: "GET",
@@ -518,10 +522,17 @@ async function readStoredEntries(
       cache: "no-store",
     });
     if (projectsResponse.ok) {
-      const projectRows = (await projectsResponse.json()) as Array<{ project_key: string; project_name: string }>;
+      const projectRows = (await projectsResponse.json()) as Array<{
+        project_key: string;
+        project_name: string;
+        project_type?: "work" | "non_work";
+      }>;
       for (const row of projectRows) {
         if (!row.project_key) continue;
-        projectNameByKey.set(row.project_key, row.project_name);
+        projectByKey.set(row.project_key, {
+          name: row.project_name,
+          type: row.project_type === "non_work" ? "non_work" : "work",
+        });
       }
     }
   }
@@ -531,7 +542,8 @@ async function readStoredEntries(
     description: row.description,
     start: row.start_at,
     durationSeconds: row.duration_seconds,
-    projectName: row.project_key ? projectNameByKey.get(row.project_key) ?? null : null,
+    projectName: row.project_key ? projectByKey.get(row.project_key)?.name ?? null : null,
+    projectType: row.project_key ? projectByKey.get(row.project_key)?.type ?? "work" : "work",
   }));
   return { entries, latestSyncedAt };
 }
