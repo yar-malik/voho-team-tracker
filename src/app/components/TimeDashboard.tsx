@@ -88,6 +88,9 @@ const HOURS_IN_DAY = 24;
 const HOUR_HEIGHT = 88;
 const MIN_BLOCK_HEIGHT = 24;
 const DRAG_SNAP_MINUTES = 5;
+const CLICK_CREATE_DEFAULT_MINUTES = 60;
+const CLICK_CREATE_MIN_MINUTES = 5;
+const CLICK_CREATE_MAX_MINUTES = 120;
 const RANKING_ENTRY_CAP_SECONDS = 4 * 60 * 60;
 const EXCLUDED_PROJECT_NAME = "non-work-task";
 const ALL_CALENDAR_MEMBER_HEADER_HEIGHT = 34;
@@ -1459,6 +1462,42 @@ export default function TimeDashboard({
 
   const hideHoverTooltip = () => setHoverTooltip(null);
 
+  const createEntryAtCalendarPosition = async (
+    memberName: string,
+    clientY: number,
+    containerEl: HTMLElement
+  ) => {
+    const bounds = containerEl.getBoundingClientRect();
+    const relativeY = Math.max(0, Math.min(bounds.height, clientY - bounds.top));
+    const clickedMinute = Math.max(0, Math.min(24 * 60 - 1, snapMinutes((relativeY / HOUR_HEIGHT) * 60)));
+    const remainingMinutes = Math.max(1, 24 * 60 - clickedMinute);
+    const durationMinutes = Math.min(
+      CLICK_CREATE_MAX_MINUTES,
+      Math.max(CLICK_CREATE_MIN_MINUTES, Math.min(CLICK_CREATE_DEFAULT_MINUTES, remainingMinutes))
+    );
+
+    try {
+      const res = await fetch("/api/time-entries/manual", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          member: memberName,
+          description: "",
+          project: "",
+          startAt: minuteToIso(date, clickedMinute),
+          durationMinutes,
+          tzOffset: new Date().getTimezoneOffset(),
+        }),
+      });
+      const payload = (await res.json()) as { error?: string };
+      if (!res.ok || payload.error) throw new Error(payload.error || "Failed to create time slot");
+      window.dispatchEvent(new CustomEvent("voho-entries-changed", { detail: { memberName } }));
+      window.dispatchEvent(new CustomEvent("voho-team-hours-changed"));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create time slot");
+    }
+  };
+
   const placeHoverTooltip = (event: ReactMouseEvent<HTMLElement>, text: string) => {
     const tooltipWidth = 300;
     const lineCount = text.split("\n").length;
@@ -2053,6 +2092,10 @@ export default function TimeDashboard({
                     <div
                       className="relative rounded-xl border border-slate-200 bg-slate-50"
                       style={{ height: `${HOURS_IN_DAY * HOUR_HEIGHT}px` }}
+                      onClick={(event) => {
+                        if (event.target !== event.currentTarget) return;
+                        void createEntryAtCalendarPosition(member, event.clientY, event.currentTarget);
+                      }}
                     >
                       {nowLineOffsetPx != null && (
                         <div className="pointer-events-none absolute left-0 right-0 z-20" style={{ top: `${nowLineOffsetPx}px` }}>
@@ -2065,7 +2108,7 @@ export default function TimeDashboard({
                       {Array.from({ length: HOURS_IN_DAY + 1 }).map((_, hour) => (
                         <div
                           key={hour}
-                          className="absolute left-0 right-0 border-t border-slate-200/90"
+                          className="pointer-events-none absolute left-0 right-0 border-t border-slate-200/90"
                           style={{ top: `${hour * HOUR_HEIGHT}px` }}
                         />
                       ))}
@@ -2526,6 +2569,10 @@ export default function TimeDashboard({
                       <div
                         className="relative rounded-xl border border-slate-200 bg-slate-50"
                         style={{ height: `${HOURS_IN_DAY * HOUR_HEIGHT}px` }}
+                        onClick={(event) => {
+                          if (event.target !== event.currentTarget) return;
+                          void createEntryAtCalendarPosition(memberTimeline.name, event.clientY, event.currentTarget);
+                        }}
                       >
                         {nowLineOffsetPx != null && (
                           <div className="pointer-events-none absolute left-0 right-0 z-20" style={{ top: `${nowLineOffsetPx}px` }}>
@@ -2540,7 +2587,7 @@ export default function TimeDashboard({
                           return (
                             <div
                               key={`quarter-${quarter}`}
-                              className="absolute left-0 right-0 border-t border-slate-200/55"
+                              className="pointer-events-none absolute left-0 right-0 border-t border-slate-200/55"
                               style={{ top: `${(quarter * HOUR_HEIGHT) / 4}px` }}
                             />
                           );
@@ -2548,7 +2595,7 @@ export default function TimeDashboard({
                         {Array.from({ length: HOURS_IN_DAY + 1 }).map((_, hour) => (
                           <div
                             key={hour}
-                            className="absolute left-0 right-0 border-t border-slate-200/90"
+                            className="pointer-events-none absolute left-0 right-0 border-t border-slate-200/90"
                             style={{ top: `${hour * HOUR_HEIGHT}px` }}
                           />
                         ))}

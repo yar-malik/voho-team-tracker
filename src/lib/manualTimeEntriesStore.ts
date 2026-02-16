@@ -199,7 +199,7 @@ async function ensureManualProject(projectName: string | null): Promise<EnsurePr
 export async function listProjects(options?: { includeArchived?: boolean }): Promise<StoredProject[]> {
   if (!isSupabaseConfigured()) return [];
   const includeArchived = options?.includeArchived === true;
-  const archivedFilter = includeArchived ? "" : "&project_archived=is.false";
+  const archivedFilter = includeArchived ? "" : "&project_archived=eq.false";
   const [projectsResponseWithType, aliasesResponse, rollupsResponse] = await Promise.all([
     fetch(
       `${getBaseUrl()}/rest/v1/projects?select=project_key,workspace_id,project_id,project_name,project_color,project_type,project_archived${archivedFilter}&order=project_name.asc`,
@@ -232,10 +232,21 @@ export async function listProjects(options?: { includeArchived?: boolean }): Pro
         }
       );
 
-  const projectsResponse = projectsResponseWithArchivedFallback.ok
+  const projectsResponseWithoutArchivedFilter = projectsResponseWithArchivedFallback.ok
     ? projectsResponseWithArchivedFallback
     : await fetch(
-        `${getBaseUrl()}/rest/v1/projects?select=project_key,workspace_id,project_id,project_name,project_color${archivedFilter}&order=project_name.asc`,
+        `${getBaseUrl()}/rest/v1/projects?select=project_key,workspace_id,project_id,project_name,project_color,project_type&order=project_name.asc`,
+        {
+          method: "GET",
+          headers: supabaseHeaders(),
+          cache: "no-store",
+        }
+      );
+
+  const projectsResponse = projectsResponseWithoutArchivedFilter.ok
+    ? projectsResponseWithoutArchivedFilter
+    : await fetch(
+        `${getBaseUrl()}/rest/v1/projects?select=project_key,workspace_id,project_id,project_name,project_color&order=project_name.asc`,
         {
           method: "GET",
           headers: supabaseHeaders(),
