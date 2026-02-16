@@ -505,6 +505,7 @@ export default function TimeDashboard({
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [modalProjectPickerOpen, setModalProjectPickerOpen] = useState(false);
   const [modalProjectSearch, setModalProjectSearch] = useState("");
+  const [rankingView, setRankingView] = useState<"daily" | "weekly">("daily");
   const [blockDrag, setBlockDrag] = useState<BlockDragState | null>(null);
   const dayCalendarScrollRef = useRef<HTMLDivElement | null>(null);
   const allCalendarsScrollRef = useRef<HTMLDivElement | null>(null);
@@ -1560,96 +1561,44 @@ export default function TimeDashboard({
           </div>
         )}
         {(mode === "all" || mode === "team") && (
-          <div className="md:col-span-2 rounded-xl border border-slate-200 bg-white px-4 py-3">
+          <div className="md:col-span-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Daily ranking</span>
-              <span className="text-xs text-slate-500">{date}</span>
-            </div>
-            {dailyRankingSeries.length === 0 ? (
-              <p className="mt-3 text-sm text-slate-500">No ranking data yet.</p>
-            ) : (
-              <div className="mt-3 grid grid-cols-[3.2rem_1fr] gap-2">
-                <div className="relative h-40">
-                  {dailyRankingAxisTicks.map((tick) => {
-                    return (
-                      <div
-                        key={tick.step}
-                        className="absolute right-0 text-[10px] font-medium text-slate-500"
-                        style={{ top: `${(4 - tick.step) * 25}%`, transform: "translateY(-50%)" }}
-                      >
-                        {tick.value}h
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="relative h-40 rounded-lg border border-slate-200 bg-slate-50 px-2 pt-2">
-                  {[0, 1, 2, 3, 4].map((step) => (
-                    <div
-                      key={`grid-${step}`}
-                      className="absolute left-0 right-0 border-t border-slate-200"
-                      style={{ top: `${step * 25}%` }}
-                    />
-                  ))}
-                  <div className="relative z-10 flex h-full items-end gap-2">
-                    {dailyRankingSeries.map((row) => {
-                      const hours = row.seconds / 3600;
-                      const heightPercent = Math.max(6, (hours / dailyRankingMaxHours) * 100);
-                      return (
-                        <div key={row.name} className="flex h-full min-w-[56px] flex-1 flex-col items-center justify-end gap-1">
-                          <div
-                            className={`w-full rounded-t-md ${
-                              row.isRunning
-                                ? "bg-gradient-to-t from-emerald-500 to-emerald-300"
-                                : "bg-gradient-to-t from-[#0BA5E9] to-[#67D0F8]"
-                            }`}
-                            style={{ height: `${heightPercent}%` }}
-                            title={`${row.name} • Total hours worked: ${formatDuration(row.seconds)}${
-                              row.isRunning ? " • Running now" : ""
-                            }`}
-                            onMouseEnter={(event) =>
-                              placeHoverTooltip(
-                                event,
-                                `${row.name}\nTotal hours worked: ${formatDuration(row.seconds)}${
-                                  row.isRunning ? "\nStatus: Running" : ""
-                                }`
-                              )
-                            }
-                            onMouseMove={(event) =>
-                              placeHoverTooltip(
-                                event,
-                                `${row.name}\nTotal hours worked: ${formatDuration(row.seconds)}${
-                                  row.isRunning ? "\nStatus: Running" : ""
-                                }`
-                              )
-                            }
-                            onMouseLeave={hideHoverTooltip}
-                          />
-                          <p className="w-full truncate text-center text-[11px] font-semibold text-slate-700">{row.name}</p>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
+              <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+                <button
+                  type="button"
+                  onClick={() => setRankingView("daily")}
+                  className={`rounded-md px-3 py-1.5 text-xs font-semibold ${
+                    rankingView === "daily" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600"
+                  }`}
+                >
+                  Daily
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRankingView("weekly")}
+                  className={`rounded-md px-3 py-1.5 text-xs font-semibold ${
+                    rankingView === "weekly" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600"
+                  }`}
+                >
+                  Weekly
+                </button>
               </div>
-            )}
-          </div>
-        )}
-        {(mode === "all" || mode === "team") && (
-          <div className="md:col-span-2 rounded-xl border border-slate-200 bg-white px-4 py-3">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Weekly ranking</span>
               <span className="text-xs text-slate-500">
-                {teamWeekData ? `${teamWeekData.startDate} → ${teamWeekData.endDate}` : "Last 7 days"}
+                {rankingView === "daily"
+                  ? date
+                  : teamWeekData
+                  ? `${teamWeekData.startDate} → ${teamWeekData.endDate}`
+                  : "Last 7 days"}
               </span>
             </div>
-            {weeklyRankingSeries.length === 0 ? (
-              <p className="mt-3 text-sm text-slate-500">No weekly data yet.</p>
+            {(rankingView === "daily" ? dailyRankingSeries.length === 0 : weeklyRankingSeries.length === 0) ? (
+              <p className="mt-3 text-sm text-slate-500">No {rankingView} data yet.</p>
             ) : (
               <div className="mt-3 grid grid-cols-[3.2rem_1fr] gap-2">
                 <div className="relative h-40">
-                  {weeklyRankingAxisTicks.map((tick) => (
+                  {(rankingView === "daily" ? dailyRankingAxisTicks : weeklyRankingAxisTicks).map((tick) => (
                     <div
-                      key={tick.step}
+                      key={`${rankingView}-${tick.step}`}
                       className="absolute right-0 text-[10px] font-medium text-slate-500"
                       style={{ top: `${(4 - tick.step) * 25}%`, transform: "translateY(-50%)" }}
                     >
@@ -1660,17 +1609,19 @@ export default function TimeDashboard({
                 <div className="relative h-40 rounded-lg border border-slate-200 bg-slate-50 px-2 pt-2">
                   {[0, 1, 2, 3, 4].map((step) => (
                     <div
-                      key={`weekly-grid-${step}`}
+                      key={`${rankingView}-grid-${step}`}
                       className="absolute left-0 right-0 border-t border-slate-200"
                       style={{ top: `${step * 25}%` }}
                     />
                   ))}
                   <div className="relative z-10 flex h-full items-end gap-2">
-                    {weeklyRankingSeries.map((row) => {
+                    {(rankingView === "daily" ? dailyRankingSeries : weeklyRankingSeries).map((row) => {
+                      const maxHours = rankingView === "daily" ? dailyRankingMaxHours : weeklyRankingMaxHours;
                       const hours = row.seconds / 3600;
-                      const heightPercent = Math.max(6, (hours / weeklyRankingMaxHours) * 100);
+                      const heightPercent = Math.max(6, (hours / maxHours) * 100);
+                      const label = rankingView === "daily" ? "Total hours worked" : "Total hours worked this week";
                       return (
-                        <div key={row.name} className="flex h-full min-w-[56px] flex-1 flex-col items-center justify-end gap-1">
+                        <div key={`${rankingView}-${row.name}`} className="flex h-full min-w-[56px] flex-1 flex-col items-center justify-end gap-1">
                           <div
                             className={`w-full rounded-t-md ${
                               row.isRunning
@@ -1678,23 +1629,17 @@ export default function TimeDashboard({
                                 : "bg-gradient-to-t from-[#0BA5E9] to-[#67D0F8]"
                             }`}
                             style={{ height: `${heightPercent}%` }}
-                            title={`${row.name} • Total hours worked this week: ${formatDuration(row.seconds)}${
-                              row.isRunning ? " • Running now" : ""
-                            }`}
+                            title={`${row.name} • ${label}: ${formatDuration(row.seconds)}${row.isRunning ? " • Running now" : ""}`}
                             onMouseEnter={(event) =>
                               placeHoverTooltip(
                                 event,
-                                `${row.name}\nTotal hours worked this week: ${formatDuration(row.seconds)}${
-                                  row.isRunning ? "\nStatus: Running" : ""
-                                }`
+                                `${row.name}\n${label}: ${formatDuration(row.seconds)}${row.isRunning ? "\nStatus: Running" : ""}`
                               )
                             }
                             onMouseMove={(event) =>
                               placeHoverTooltip(
                                 event,
-                                `${row.name}\nTotal hours worked this week: ${formatDuration(row.seconds)}${
-                                  row.isRunning ? "\nStatus: Running" : ""
-                                }`
+                                `${row.name}\n${label}: ${formatDuration(row.seconds)}${row.isRunning ? "\nStatus: Running" : ""}`
                               )
                             }
                             onMouseLeave={hideHoverTooltip}
