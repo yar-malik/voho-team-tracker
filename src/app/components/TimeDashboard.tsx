@@ -1283,6 +1283,14 @@ export default function TimeDashboard({
       value: Math.round((anomalyMaxHours * step) / 4),
     }));
   }, [anomalyMaxHours]);
+  const anomalyMemberColors = useMemo(
+    () => new Map(anomalyMembers.map((member, index) => [member.name, getMemberChartColor(member.name, index)])),
+    [anomalyMembers]
+  );
+  const anomalyBarWidthPx = useMemo(() => {
+    const count = Math.max(1, anomalyMembers.length);
+    return Math.max(2, Math.min(6, Math.floor(34 / count)));
+  }, [anomalyMembers]);
 
   const teamTimeline = useMemo(() => {
     if (!teamData) return [] as Array<{ name: string; blocks: TimelineBlock[]; maxLanes: number }>;
@@ -1714,72 +1722,96 @@ export default function TimeDashboard({
               : anomalyMembers.length === 0) ? (
               <p className="mt-3 text-sm text-slate-500">No {rankingView} data yet.</p>
             ) : rankingView === "anomaly" ? (
-              <div className="mt-3 grid grid-cols-[3.2rem_1fr] gap-2">
-                <div className="relative h-44">
-                  {anomalyAxisTicks.map((tick) => (
-                    <div
-                      key={`anomaly-${tick.step}`}
-                      className="absolute right-0 text-[10px] font-medium text-slate-500"
-                      style={{ top: `${(4 - tick.step) * 25}%`, transform: "translateY(-50%)" }}
-                    >
-                      {tick.value}h
-                    </div>
-                  ))}
-                </div>
-                <div className="relative h-44 rounded-lg border border-slate-200 bg-slate-50 px-2 pt-2">
-                  {[0, 1, 2, 3, 4].map((step) => (
-                    <div
-                      key={`anomaly-grid-${step}`}
-                      className="absolute left-0 right-0 border-t border-slate-200"
-                      style={{ top: `${step * 25}%` }}
-                    />
-                  ))}
-                  <div
-                    className="absolute left-0 right-0 border-t border-rose-300 border-dashed"
-                    style={{ top: `${100 - (Math.min(12, anomalyMaxHours) / anomalyMaxHours) * 100}%` }}
-                    title="12h anomaly threshold"
-                  />
-                  <div className="relative z-10 flex h-full items-end gap-3 overflow-x-auto pb-1">
-                    {(teamWeekData?.weekDates ?? []).map((day) => (
-                      <div key={`anomaly-day-${day}`} className="flex h-full min-w-[64px] flex-col items-center justify-end gap-1">
-                        <div className="flex h-full items-end gap-0.5">
-                          {anomalyMembers.map((member, memberIndex) => {
-                            const point = member.days.find((item) => item.date === day);
-                            const seconds = point?.seconds ?? 0;
-                            const hours = seconds / 3600;
-                            const heightPercent = Math.max(2, (hours / anomalyMaxHours) * 100);
-                            const anomaly = hours > 12;
-                            return (
-                              <div
-                                key={`${day}-${member.name}`}
-                                className={`w-1.5 rounded-t-sm ${anomaly ? "bg-rose-500" : ""}`}
-                                style={{ height: `${heightPercent}%`, backgroundColor: anomaly ? undefined : getMemberChartColor(member.name, memberIndex) }}
-                                title={`${member.name} • ${day} • ${formatDuration(seconds)}${anomaly ? " • Possible anomaly" : ""}`}
-                                onMouseEnter={(event) =>
-                                  placeHoverTooltip(
-                                    event,
-                                    `${member.name}\n${day}\nHours worked: ${formatDuration(seconds)}${anomaly ? "\nPossible anomaly (>12h)" : ""}`
-                                  )
-                                }
-                                onMouseMove={(event) =>
-                                  placeHoverTooltip(
-                                    event,
-                                    `${member.name}\n${day}\nHours worked: ${formatDuration(seconds)}${anomaly ? "\nPossible anomaly (>12h)" : ""}`
-                                  )
-                                }
-                                onMouseLeave={hideHoverTooltip}
-                              />
-                            );
-                          })}
-                        </div>
-                        <p className="w-full truncate text-center text-[10px] font-semibold text-slate-700">
-                          {new Date(`${day}T00:00:00`).toLocaleDateString([], { weekday: "short", day: "2-digit" })}
-                        </p>
+              <>
+                <div className="mt-3 grid grid-cols-[3.2rem_1fr] gap-2">
+                  <div className="relative h-44">
+                    {anomalyAxisTicks.map((tick) => (
+                      <div
+                        key={`anomaly-${tick.step}`}
+                        className="absolute right-0 text-[10px] font-medium text-slate-500"
+                        style={{ top: `${(4 - tick.step) * 25}%`, transform: "translateY(-50%)" }}
+                      >
+                        {tick.value}h
                       </div>
                     ))}
                   </div>
+                  <div className="relative h-44 rounded-lg border border-slate-200 bg-slate-50 px-2 pt-2">
+                    {[0, 1, 2, 3, 4].map((step) => (
+                      <div
+                        key={`anomaly-grid-${step}`}
+                        className="absolute left-0 right-0 border-t border-slate-200"
+                        style={{ top: `${step * 25}%` }}
+                      />
+                    ))}
+                    <div
+                      className="absolute left-0 right-0 border-t border-rose-300 border-dashed"
+                      style={{ top: `${100 - (Math.min(12, anomalyMaxHours) / anomalyMaxHours) * 100}%` }}
+                      title="12h anomaly threshold"
+                    />
+                    <div className="relative z-10 grid h-full grid-cols-7 items-end gap-2 pb-1">
+                      {(teamWeekData?.weekDates ?? []).map((day) => (
+                        <div key={`anomaly-day-${day}`} className="flex h-full min-w-0 flex-col items-center justify-end gap-1">
+                          <div className="flex h-full items-end gap-0.5">
+                            {anomalyMembers.map((member, memberIndex) => {
+                              const point = member.days.find((item) => item.date === day);
+                              const seconds = point?.seconds ?? 0;
+                              const hours = seconds / 3600;
+                              const heightPercent = Math.max(2, (hours / anomalyMaxHours) * 100);
+                              const anomaly = hours > 12;
+                              return (
+                                <div
+                                  key={`${day}-${member.name}`}
+                                  className={`rounded-t-sm ${anomaly ? "bg-rose-500" : ""}`}
+                                  style={{
+                                    width: `${anomalyBarWidthPx}px`,
+                                    height: `${heightPercent}%`,
+                                    backgroundColor: anomaly ? undefined : anomalyMemberColors.get(member.name) ?? getMemberChartColor(member.name, memberIndex),
+                                  }}
+                                  title={`${member.name} • ${day} • ${formatDuration(seconds)}${anomaly ? " • Possible anomaly" : ""}`}
+                                  onMouseEnter={(event) =>
+                                    placeHoverTooltip(
+                                      event,
+                                      `${member.name}\n${day}\nHours worked: ${formatDuration(seconds)}${anomaly ? "\nPossible anomaly (>12h)" : ""}`
+                                    )
+                                  }
+                                  onMouseMove={(event) =>
+                                    placeHoverTooltip(
+                                      event,
+                                      `${member.name}\n${day}\nHours worked: ${formatDuration(seconds)}${anomaly ? "\nPossible anomaly (>12h)" : ""}`
+                                    )
+                                  }
+                                  onMouseLeave={hideHoverTooltip}
+                                />
+                              );
+                            })}
+                          </div>
+                          <p className="w-full truncate text-center text-[10px] font-semibold text-slate-700">
+                            {new Date(`${day}T00:00:00`).toLocaleDateString([], { weekday: "short", day: "2-digit" })}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-              </div>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {anomalyMembers.map((member) => (
+                    <div
+                      key={`anomaly-legend-${member.name}`}
+                      className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700"
+                    >
+                      <span
+                        className="inline-block h-2.5 w-2.5 rounded-full"
+                        style={{ backgroundColor: anomalyMemberColors.get(member.name) ?? "#64748b" }}
+                      />
+                      <span className="max-w-[110px] truncate">{member.name}</span>
+                    </div>
+                  ))}
+                  <div className="inline-flex items-center gap-2 rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-medium text-rose-700">
+                    <span className="inline-block h-2.5 w-2.5 rounded-full bg-rose-500" />
+                    <span>Anomaly (&gt;12h)</span>
+                  </div>
+                </div>
+              </>
             ) : (
               <div className="mt-3 grid grid-cols-[3.2rem_1fr] gap-2">
                 <div className="relative h-40">
