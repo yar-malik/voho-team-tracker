@@ -1316,7 +1316,7 @@ export default function TimeDashboard({
   }, [anomalyMembers, memberColorMap]);
   const anomalyBarWidthPx = useMemo(() => {
     const count = Math.max(1, anomalyMembers.length);
-    return Math.max(4, Math.min(10, Math.floor(44 / count)));
+    return Math.max(10, Math.min(24, Math.floor(110 / count)));
   }, [anomalyMembers]);
 
   const teamTimeline = useMemo(() => {
@@ -1891,11 +1891,12 @@ export default function TimeDashboard({
                       return (
                         <div key={`${rankingView}-${row.name}`} className="flex h-full min-w-[56px] flex-1 flex-col items-center justify-end gap-1">
                           <div
-                            className={`w-full rounded-t-md ${row.isRunning ? "ring-2 ring-emerald-400 ring-offset-1" : ""}`}
-                            style={{
-                              height: `${heightPercent}%`,
-                              backgroundColor: memberColorMap.get(row.name) ?? "#0BA5E9",
-                            }}
+                            className={`w-full rounded-t-md ${
+                              row.isRunning
+                                ? "bg-gradient-to-t from-emerald-500 to-emerald-300"
+                                : "bg-gradient-to-t from-[#0BA5E9] to-[#67D0F8]"
+                            }`}
+                            style={{ height: `${heightPercent}%` }}
                             title={`${row.name} • ${label}: ${formatDuration(row.seconds)}${row.isRunning ? " • Running now" : ""}`}
                             onMouseEnter={(event) =>
                               placeHoverTooltip(
