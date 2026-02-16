@@ -83,8 +83,8 @@ async function readStoredEntries(member: string, startIso: string, endIso: strin
     `${base}/rest/v1/time_entries` +
     `?select=entry_id,description,start_at,stop_at,duration_seconds,is_running,tags,project_key,synced_at` +
     `&member_name=eq.${encodeURIComponent(member)}` +
-    `&start_at=gte.${encodeURIComponent(startIso)}` +
     `&start_at=lte.${encodeURIComponent(endIso)}` +
+    `&or=${encodeURIComponent(`(stop_at.is.null,stop_at.gte.${startIso})`)}` +
     `&order=start_at.asc`;
 
   const response = await fetch(url, {

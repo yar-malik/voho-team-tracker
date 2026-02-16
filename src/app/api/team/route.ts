@@ -95,8 +95,8 @@ async function readStoredTeam(
     `${base}/rest/v1/time_entries` +
     `?select=member_name,entry_id,description,start_at,stop_at,duration_seconds,tags,project_key,synced_at` +
     `&member_name=${encodeURIComponent(memberFilter)}` +
-    `&start_at=gte.${encodeURIComponent(startIso)}` +
     `&start_at=lte.${encodeURIComponent(endIso)}` +
+    `&or=${encodeURIComponent(`(stop_at.is.null,stop_at.gte.${startIso})`)}` +
     `&order=start_at.asc`;
 
   const response = await fetch(url, {
