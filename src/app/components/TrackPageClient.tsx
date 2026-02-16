@@ -62,6 +62,13 @@ const MIN_ENTRY_MINUTES = 15;
 const DRAG_SNAP_MINUTES = 5;
 const ZOOM_LEVELS = [48, 56, 68, 80, 96, 112] as const;
 
+function createIdempotencyKey(prefix: string) {
+  const token = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  return `${prefix}-${token}`;
+}
+
 function formatLocalDateInput(date: Date): string {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
@@ -370,11 +377,17 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
       setRefreshTick((value) => value + 1);
     };
 
+    const onTeamHoursChanged = () => {
+      setRefreshTick((value) => value + 1);
+    };
+
     window.addEventListener("voho-timer-changed", onTimerChanged as EventListener);
     window.addEventListener("voho-entries-changed", onEntriesChanged as EventListener);
+    window.addEventListener("voho-team-hours-changed", onTeamHoursChanged as EventListener);
     return () => {
       window.removeEventListener("voho-timer-changed", onTimerChanged as EventListener);
       window.removeEventListener("voho-entries-changed", onEntriesChanged as EventListener);
+      window.removeEventListener("voho-team-hours-changed", onTeamHoursChanged as EventListener);
     };
   }, [memberName]);
 
@@ -460,7 +473,10 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
       try {
         const res = await fetch("/api/time-entries/update", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "x-idempotency-key": createIdempotencyKey("entry-update"),
+          },
           body: JSON.stringify({
             member: memberName,
             entryId: finalDrag.block.entryId,
@@ -816,7 +832,10 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
                       const startAt = buildLocalDateTimeIso(date, calendarDraft.hour, calendarDraft.minute);
                       const res = await fetch("/api/time-entries/manual", {
                         method: "POST",
-                        headers: { "Content-Type": "application/json" },
+                        headers: {
+                          "Content-Type": "application/json",
+                          "x-idempotency-key": createIdempotencyKey("entry-manual"),
+                        },
                         body: JSON.stringify({
                           member: memberName,
                           description: "",
@@ -1110,7 +1129,10 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
                       if (currentTimer) {
                         const stopRes = await fetch("/api/time-entries/stop", {
                           method: "POST",
-                          headers: { "Content-Type": "application/json" },
+                          headers: {
+                            "Content-Type": "application/json",
+                            "x-idempotency-key": createIdempotencyKey("timer-stop"),
+                          },
                           body: JSON.stringify({ member: memberName, tzOffset: new Date().getTimezoneOffset() }),
                         });
                         const stopData = (await stopRes.json()) as { error?: string };
@@ -1119,7 +1141,10 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
 
                       const startRes = await fetch("/api/time-entries/start", {
                         method: "POST",
-                        headers: { "Content-Type": "application/json" },
+                        headers: {
+                          "Content-Type": "application/json",
+                          "x-idempotency-key": createIdempotencyKey("timer-start"),
+                        },
                         body: JSON.stringify({
                           member: memberName,
                           description: entryEditor.description,
@@ -1180,7 +1205,10 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
                     try {
                       const res = await fetch("/api/time-entries/update", {
                         method: "POST",
-                        headers: { "Content-Type": "application/json" },
+                        headers: {
+                          "Content-Type": "application/json",
+                          "x-idempotency-key": createIdempotencyKey("entry-update"),
+                        },
                         body: JSON.stringify({
                           member: memberName,
                           entryId: entryEditor.entryId,

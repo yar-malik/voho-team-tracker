@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveCanonicalMemberName, stopManualTimer } from "@/lib/manualTimeEntriesStore";
+import { readIdempotentResponse, writeIdempotentResponse } from "@/lib/idempotency";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -10,6 +11,7 @@ type StopRequest = {
 };
 
 export async function POST(request: NextRequest) {
+  const idempotencyKey = request.headers.get("x-idempotency-key");
   let body: StopRequest;
   try {
     body = (await request.json()) as StopRequest;
@@ -21,6 +23,16 @@ export async function POST(request: NextRequest) {
   if (!member) {
     return NextResponse.json({ error: "Missing member" }, { status: 400 });
   }
+
+  const cached = await readIdempotentResponse({
+    scope: "time-entries-stop",
+    member,
+    idempotencyKey,
+  });
+  if (cached) {
+    return NextResponse.json(cached.body, { status: cached.status });
+  }
+
   const canonicalMember = await resolveCanonicalMemberName(member);
   if (!canonicalMember) {
     return NextResponse.json({ error: "Unknown member" }, { status: 404 });
@@ -32,15 +44,40 @@ export async function POST(request: NextRequest) {
       tzOffsetMinutes: body.tzOffset,
     });
     if (!result.stopped) {
-      return NextResponse.json({ error: "No running timer for member" }, { status: 409 });
+      const responseBody = { error: "No running timer for member" };
+      await writeIdempotentResponse({
+        scope: "time-entries-stop",
+        member: canonicalMember,
+        idempotencyKey,
+        status: 409,
+        body: responseBody,
+      });
+      return NextResponse.json(responseBody, { status: 409 });
     }
-    return NextResponse.json({
+    const responseBody = {
       ok: true,
       stopped: result.stoppedEntry,
       source: "db",
+    };
+    await writeIdempotentResponse({
+      scope: "time-entries-stop",
+      member: canonicalMember,
+      idempotencyKey,
+      status: 200,
+      body: responseBody,
     });
+    return NextResponse.json(responseBody);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to stop timer";
-    return NextResponse.json({ error: message }, { status: 500 });
+    const responseBody = { error: message };
+    await writeIdempotentResponse({
+      scope: "time-entries-stop",
+      member: canonicalMember,
+      idempotencyKey,
+      status: 500,
+      body: responseBody,
+      ttlSeconds: 120,
+    });
+    return NextResponse.json(responseBody, { status: 500 });
   }
 }

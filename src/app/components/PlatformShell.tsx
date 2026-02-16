@@ -14,6 +14,7 @@ import {
   startPomodoro,
   writePomodoroState,
 } from "@/lib/pomodoroClient";
+import { getRealtimeClient } from "@/lib/realtimeClient";
 
 type IconProps = { className?: string };
 
@@ -313,6 +314,106 @@ export default function PlatformShell({
       window.removeEventListener("voho-timer-changed", handleTimerChanged as EventListener);
     };
   }, [currentMemberName]);
+
+  useEffect(() => {
+    const realtime = getRealtimeClient();
+    if (!realtime) return;
+
+    const channel = realtime
+      .channel(`voho-live-${Math.random().toString(36).slice(2, 10)}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "time_entries" },
+        (payload) => {
+          const nextRow = (payload.new ?? null) as
+            | {
+                member_name?: string | null;
+                is_running?: boolean | null;
+                start_at?: string | null;
+                duration_seconds?: number | null;
+                description?: string | null;
+              }
+            | null;
+          const prevRow = (payload.old ?? null) as
+            | {
+                member_name?: string | null;
+                is_running?: boolean | null;
+              }
+            | null;
+
+          const memberName = (nextRow?.member_name || prevRow?.member_name || "").trim();
+          if (!memberName) return;
+
+          window.dispatchEvent(new CustomEvent("voho-entries-changed", { detail: { memberName } }));
+
+          const isRunningNow = Boolean(nextRow?.is_running);
+          const wasRunning = Boolean(prevRow?.is_running);
+          if (payload.eventType === "INSERT" && isRunningNow) {
+            window.dispatchEvent(
+              new CustomEvent("voho-timer-changed", {
+                detail: {
+                  memberName,
+                  isRunning: true,
+                  startAt: nextRow?.start_at ?? null,
+                  durationSeconds: Math.max(0, Number(nextRow?.duration_seconds ?? 0)),
+                  description: nextRow?.description ?? null,
+                },
+              })
+            );
+            return;
+          }
+          if (payload.eventType === "UPDATE") {
+            if (isRunningNow) {
+              window.dispatchEvent(
+                new CustomEvent("voho-timer-changed", {
+                  detail: {
+                    memberName,
+                    isRunning: true,
+                    startAt: nextRow?.start_at ?? null,
+                    durationSeconds: Math.max(0, Number(nextRow?.duration_seconds ?? 0)),
+                    description: nextRow?.description ?? null,
+                  },
+                })
+              );
+              return;
+            }
+            if (wasRunning && !isRunningNow) {
+              window.dispatchEvent(
+                new CustomEvent("voho-timer-changed", {
+                  detail: {
+                    memberName,
+                    isRunning: false,
+                  },
+                })
+              );
+            }
+            return;
+          }
+          if (payload.eventType === "DELETE" && wasRunning) {
+            window.dispatchEvent(
+              new CustomEvent("voho-timer-changed", {
+                detail: {
+                  memberName,
+                  isRunning: false,
+                },
+              })
+            );
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "daily_member_stats" },
+        () => {
+          window.dispatchEvent(new CustomEvent("voho-team-hours-changed"));
+        }
+      );
+
+    channel.subscribe();
+    return () => {
+      void realtime.removeChannel(channel);
+    };
+  }, []);
 
   const runningSeconds = useMemo(() => {
     if (!timerStartAt) return 0;

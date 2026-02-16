@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveCanonicalMemberName, updateStoredTimeEntry } from "@/lib/manualTimeEntriesStore";
+import { readIdempotentResponse, writeIdempotentResponse } from "@/lib/idempotency";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -15,6 +16,7 @@ type UpdateRequest = {
 };
 
 export async function POST(request: NextRequest) {
+  const idempotencyKey = request.headers.get("x-idempotency-key");
   let body: UpdateRequest;
   try {
     body = (await request.json()) as UpdateRequest;
@@ -26,6 +28,16 @@ export async function POST(request: NextRequest) {
   if (!member) {
     return NextResponse.json({ error: "Missing member" }, { status: 400 });
   }
+
+  const cached = await readIdempotentResponse({
+    scope: "time-entries-update",
+    member,
+    idempotencyKey,
+  });
+  if (cached) {
+    return NextResponse.json(cached.body, { status: cached.status });
+  }
+
   const canonicalMember = await resolveCanonicalMemberName(member);
   if (!canonicalMember) {
     return NextResponse.json({ error: "Unknown member" }, { status: 404 });
@@ -51,13 +63,30 @@ export async function POST(request: NextRequest) {
       stopAtIso: stopAt,
       tzOffsetMinutes: body.tzOffset,
     });
-    return NextResponse.json({
+    const responseBody = {
       ok: true,
       entry,
       source: "db",
+    };
+    await writeIdempotentResponse({
+      scope: "time-entries-update",
+      member: canonicalMember,
+      idempotencyKey,
+      status: 200,
+      body: responseBody,
     });
+    return NextResponse.json(responseBody);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to update entry";
-    return NextResponse.json({ error: message }, { status: 500 });
+    const responseBody = { error: message };
+    await writeIdempotentResponse({
+      scope: "time-entries-update",
+      member: canonicalMember,
+      idempotencyKey,
+      status: 500,
+      body: responseBody,
+      ttlSeconds: 120,
+    });
+    return NextResponse.json(responseBody, { status: 500 });
   }
 }

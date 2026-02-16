@@ -1043,6 +1043,16 @@ export default function TimeDashboard({
     };
   }, [date, member]);
 
+  useEffect(() => {
+    const onTeamHoursChanged = () => {
+      setRefreshTick((value) => value + 1);
+    };
+    window.addEventListener("voho-team-hours-changed", onTeamHoursChanged as EventListener);
+    return () => {
+      window.removeEventListener("voho-team-hours-changed", onTeamHoursChanged as EventListener);
+    };
+  }, []);
+
   const runningEntry = useMemo(() => {
     if (!data?.current) return null;
     if (data.current.duration >= 0) return null;

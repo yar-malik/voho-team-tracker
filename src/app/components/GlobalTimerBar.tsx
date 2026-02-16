@@ -24,6 +24,13 @@ type PendingDraft = {
 
 const PENDING_DRAFT_STORAGE_KEY = "voho_pending_running_draft";
 
+function createIdempotencyKey(prefix: string) {
+  const token = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  return `${prefix}-${token}`;
+}
+
 function formatTimer(totalSeconds: number): string {
   const safe = Math.max(0, Math.floor(totalSeconds));
   const h = Math.floor(safe / 3600);
@@ -380,7 +387,10 @@ export default function GlobalTimerBar({ memberName }: { memberName: string | nu
         );
         const patchRes = await fetch("/api/time-entries/current", {
           method: "PATCH",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "x-idempotency-key": createIdempotencyKey("running-patch"),
+          },
           body: JSON.stringify({
             member: memberName,
             description,
@@ -430,7 +440,10 @@ export default function GlobalTimerBar({ memberName }: { memberName: string | nu
         );
         const res = await fetch("/api/time-entries/start", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "x-idempotency-key": createIdempotencyKey("timer-start"),
+          },
           body: JSON.stringify({
             member: memberName,
             description,
@@ -628,10 +641,14 @@ export default function GlobalTimerBar({ memberName }: { memberName: string | nu
               );
               window.dispatchEvent(new CustomEvent("voho-entries-changed", { detail: { memberName } }));
               try {
+                const stopIdempotencyKey = createIdempotencyKey("timer-stop");
                 const tryStop = async () =>
                   fetch("/api/time-entries/stop", {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: {
+                      "Content-Type": "application/json",
+                      "x-idempotency-key": stopIdempotencyKey,
+                    },
                     body: JSON.stringify({ member: memberName, tzOffset: new Date().getTimezoneOffset() }),
                   });
 
@@ -707,7 +724,10 @@ export default function GlobalTimerBar({ memberName }: { memberName: string | nu
 
               const res = await fetch("/api/time-entries/start", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: {
+                  "Content-Type": "application/json",
+                  "x-idempotency-key": createIdempotencyKey("timer-start"),
+                },
                 body: JSON.stringify({
                   member: memberName,
                   description,

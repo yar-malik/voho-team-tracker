@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { backdateRunningEntry, getRunningEntry, resolveCanonicalMemberName, updateRunningEntryMetadata } from "@/lib/manualTimeEntriesStore";
+import { readIdempotentResponse, writeIdempotentResponse } from "@/lib/idempotency";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -39,6 +40,7 @@ type UpdateCurrentBody = {
 };
 
 export async function PATCH(request: NextRequest) {
+  const idempotencyKey = request.headers.get("x-idempotency-key");
   let body: UpdateCurrentBody;
   try {
     body = (await request.json()) as UpdateCurrentBody;
@@ -49,6 +51,15 @@ export async function PATCH(request: NextRequest) {
   const member = body.member?.trim();
   if (!member) {
     return NextResponse.json({ error: "Missing member" }, { status: 400 });
+  }
+
+  const cached = await readIdempotentResponse({
+    scope: "time-entries-current-patch",
+    member,
+    idempotencyKey,
+  });
+  if (cached) {
+    return NextResponse.json(cached.body, { status: cached.status });
   }
 
   const canonicalMember = await resolveCanonicalMemberName(member);
@@ -72,15 +83,33 @@ export async function PATCH(request: NextRequest) {
             description: body.description ?? null,
             projectName: body.project ?? null,
           });
-    return NextResponse.json({
+    const responseBody = {
       ok: true,
       member: canonicalMember,
       current: updated,
       cachedAt: new Date().toISOString(),
       source: "db",
+    };
+    await writeIdempotentResponse({
+      scope: "time-entries-current-patch",
+      member: canonicalMember,
+      idempotencyKey,
+      status: 200,
+      body: responseBody,
+      ttlSeconds: 180,
     });
+    return NextResponse.json(responseBody);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to update running timer";
-    return NextResponse.json({ error: message }, { status: 500 });
+    const responseBody = { error: message };
+    await writeIdempotentResponse({
+      scope: "time-entries-current-patch",
+      member: canonicalMember,
+      idempotencyKey,
+      status: 500,
+      body: responseBody,
+      ttlSeconds: 60,
+    });
+    return NextResponse.json(responseBody, { status: 500 });
   }
 }
