@@ -454,14 +454,34 @@ function getTaskSummaryTooltip(item: TaskProjectSummaryRow) {
   ].join("\n");
 }
 
-function getMemberChartColor(memberName: string, index: number) {
-  const seed = `${memberName}:${index}`;
-  let hash = 0;
-  for (let i = 0; i < seed.length; i += 1) {
-    hash = (hash * 31 + seed.charCodeAt(i)) | 0;
-  }
-  const hue = Math.abs(hash) % 360;
-  return `hsl(${hue} 70% 55%)`;
+const MEMBER_CHART_PALETTE = [
+  "#0EA5E9",
+  "#22C55E",
+  "#F97316",
+  "#A855F7",
+  "#14B8A6",
+  "#E11D48",
+  "#F59E0B",
+  "#6366F1",
+  "#10B981",
+  "#EC4899",
+  "#3B82F6",
+  "#84CC16",
+] as const;
+
+function buildMemberColorMap(memberNames: string[]) {
+  const map = new Map<string, string>();
+  const unique = Array.from(new Set(memberNames.map((name) => name.trim()).filter((name) => name.length > 0)));
+  unique.forEach((name, index) => {
+    if (index < MEMBER_CHART_PALETTE.length) {
+      map.set(name, MEMBER_CHART_PALETTE[index]);
+      return;
+    }
+    const overflow = index - MEMBER_CHART_PALETTE.length;
+    const hue = (overflow * 47) % 360;
+    map.set(name, `hsl(${hue} 72% 50%)`);
+  });
+  return map;
 }
 
 export default function TimeDashboard({
@@ -1133,6 +1153,10 @@ export default function TimeDashboard({
     () => new Set(selectedMembers.map((name) => name.trim().toLowerCase())),
     [selectedMembers]
   );
+  const memberColorMap = useMemo(
+    () => buildMemberColorMap([...members.map((item) => item.name)].sort((a, b) => a.localeCompare(b))),
+    [members]
+  );
 
   const summary = useMemo(() => {
     if (!data) return [] as { label: string; seconds: number }[];
@@ -1283,13 +1307,16 @@ export default function TimeDashboard({
       value: Math.round((anomalyMaxHours * step) / 4),
     }));
   }, [anomalyMaxHours]);
-  const anomalyMemberColors = useMemo(
-    () => new Map(anomalyMembers.map((member, index) => [member.name, getMemberChartColor(member.name, index)])),
-    [anomalyMembers]
-  );
+  const anomalyMemberColors = useMemo(() => {
+    const map = new Map<string, string>();
+    anomalyMembers.forEach((member) => {
+      map.set(member.name, memberColorMap.get(member.name) ?? "#64748b");
+    });
+    return map;
+  }, [anomalyMembers, memberColorMap]);
   const anomalyBarWidthPx = useMemo(() => {
     const count = Math.max(1, anomalyMembers.length);
-    return Math.max(2, Math.min(6, Math.floor(34 / count)));
+    return Math.max(4, Math.min(10, Math.floor(44 / count)));
   }, [anomalyMembers]);
 
   const teamTimeline = useMemo(() => {
@@ -1694,7 +1721,7 @@ export default function TimeDashboard({
                     rankingView === "anomaly" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600"
                   }`}
                 >
-                  7-day anomalies
+                  7-day bar chart
                 </button>
               </div>
               <span className="text-xs text-slate-500">
@@ -1720,7 +1747,9 @@ export default function TimeDashboard({
               : rankingView === "monthly"
               ? monthlyRankingSeries.length === 0
               : anomalyMembers.length === 0) ? (
-              <p className="mt-3 text-sm text-slate-500">No {rankingView} data yet.</p>
+              <p className="mt-3 text-sm text-slate-500">
+                No {rankingView === "anomaly" ? "7-day bar chart" : rankingView} data yet.
+              </p>
             ) : rankingView === "anomaly" ? (
               <>
                 <div className="mt-3 grid grid-cols-[3.2rem_1fr] gap-2">
@@ -1751,8 +1780,8 @@ export default function TimeDashboard({
                     <div className="relative z-10 grid h-full grid-cols-7 items-end gap-2 pb-1">
                       {(teamWeekData?.weekDates ?? []).map((day) => (
                         <div key={`anomaly-day-${day}`} className="flex h-full min-w-0 flex-col items-center justify-end gap-1">
-                          <div className="flex h-full items-end gap-0.5">
-                            {anomalyMembers.map((member, memberIndex) => {
+                          <div className="flex h-full items-end gap-px">
+                          {anomalyMembers.map((member) => {
                               const point = member.days.find((item) => item.date === day);
                               const seconds = point?.seconds ?? 0;
                               const hours = seconds / 3600;
@@ -1765,7 +1794,7 @@ export default function TimeDashboard({
                                   style={{
                                     width: `${anomalyBarWidthPx}px`,
                                     height: `${heightPercent}%`,
-                                    backgroundColor: anomaly ? undefined : anomalyMemberColors.get(member.name) ?? getMemberChartColor(member.name, memberIndex),
+                                    backgroundColor: anomaly ? undefined : anomalyMemberColors.get(member.name) ?? "#64748b",
                                   }}
                                   title={`${member.name} • ${day} • ${formatDuration(seconds)}${anomaly ? " • Possible anomaly" : ""}`}
                                   onMouseEnter={(event) =>
@@ -1862,12 +1891,11 @@ export default function TimeDashboard({
                       return (
                         <div key={`${rankingView}-${row.name}`} className="flex h-full min-w-[56px] flex-1 flex-col items-center justify-end gap-1">
                           <div
-                            className={`w-full rounded-t-md ${
-                              row.isRunning
-                                ? "bg-gradient-to-t from-emerald-500 to-emerald-300"
-                                : "bg-gradient-to-t from-[#0BA5E9] to-[#67D0F8]"
-                            }`}
-                            style={{ height: `${heightPercent}%` }}
+                            className={`w-full rounded-t-md ${row.isRunning ? "ring-2 ring-emerald-400 ring-offset-1" : ""}`}
+                            style={{
+                              height: `${heightPercent}%`,
+                              backgroundColor: memberColorMap.get(row.name) ?? "#0BA5E9",
+                            }}
                             title={`${row.name} • ${label}: ${formatDuration(row.seconds)}${row.isRunning ? " • Running now" : ""}`}
                             onMouseEnter={(event) =>
                               placeHoverTooltip(
