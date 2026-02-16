@@ -892,30 +892,82 @@ export default function TimeDashboard({
       const detail = custom.detail;
       if (!detail?.memberName) return;
       const targetMember = detail.memberName.trim().toLowerCase();
+      const optimisticStart = detail.startAt ?? new Date().toISOString();
+      const optimisticId = -Math.max(1, Math.floor(new Date(optimisticStart).getTime() / 1000));
 
       setTeamData((prev) => {
         if (!prev) return prev;
         const nextMembers = prev.members.map((memberData) => {
           if (memberData.name.trim().toLowerCase() !== targetMember) return memberData;
           if (detail.isRunning) {
+            const optimisticRunningEntry: TimeEntry = {
+              id: optimisticId,
+              description: detail.description ?? null,
+              start: optimisticStart,
+              stop: null,
+              duration: -1,
+              project_name: detail.projectName ?? null,
+              project_color: null,
+              project_type: "work",
+              tags: [],
+            };
+            const nextEntries = [
+              ...memberData.entries.filter((entry) => entry.stop !== null),
+              optimisticRunningEntry,
+            ].sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
             return {
               ...memberData,
+              entries: nextEntries,
               current: {
-                id: Number(detail.durationSeconds ?? 0) + Date.now(),
-                description: detail.description ?? memberData.current?.description ?? null,
-                start: detail.startAt ?? new Date().toISOString(),
+                id: optimisticRunningEntry.id,
+                description: optimisticRunningEntry.description,
+                start: optimisticRunningEntry.start,
                 stop: null,
                 duration: -1,
-                project_name: detail.projectName ?? memberData.current?.project_name ?? null,
+                project_name: optimisticRunningEntry.project_name,
+                project_color: optimisticRunningEntry.project_color,
+                project_type: optimisticRunningEntry.project_type,
               },
             };
           }
+          const withoutRunning = memberData.entries.filter((entry) => entry.stop !== null);
           return {
             ...memberData,
+            entries: withoutRunning,
             current: null,
           };
         });
         return { ...prev, members: nextMembers };
+      });
+
+      setData((prev) => {
+        if (!prev) return prev;
+        if (member.trim().toLowerCase() !== targetMember) return prev;
+        if (detail.isRunning) {
+          const optimisticRunningEntry: TimeEntry = {
+            id: optimisticId,
+            description: detail.description ?? null,
+            start: optimisticStart,
+            stop: null,
+            duration: -1,
+            project_name: detail.projectName ?? null,
+            project_color: null,
+            project_type: "work",
+            tags: [],
+          };
+          return {
+            ...prev,
+            entries: [...prev.entries.filter((entry) => entry.stop !== null), optimisticRunningEntry].sort(
+              (a, b) => new Date(a.start).getTime() - new Date(b.start).getTime()
+            ),
+            current: optimisticRunningEntry,
+          };
+        }
+        return {
+          ...prev,
+          entries: prev.entries.filter((entry) => entry.stop !== null),
+          current: null,
+        };
       });
 
       if (!detail.isRunning) {
@@ -927,7 +979,7 @@ export default function TimeDashboard({
     return () => {
       window.removeEventListener("voho-timer-changed", onTimerChanged as EventListener);
     };
-  }, []);
+  }, [member]);
 
   useEffect(() => {
     const onEntriesChanged = (event: Event) => {
