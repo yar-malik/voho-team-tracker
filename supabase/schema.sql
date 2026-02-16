@@ -113,7 +113,7 @@ $$;
 create sequence if not exists public.time_entries_id_seq;
 
 create table if not exists public.time_entries (
-  toggl_entry_id bigint primary key default nextval('public.time_entries_id_seq'),
+  entry_id bigint primary key default nextval('public.time_entries_id_seq'),
   entry_source text not null default 'toggl',
   source_entry_id text null,
   member_name text not null references public.members(member_name) on update cascade,

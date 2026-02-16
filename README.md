@@ -1,6 +1,25 @@
 # Voho Tracker
 
-Voho Tracker is a DB-first team time-tracking platform built with Next.js + Supabase.
+Voho Tracker is a DB-first time tracking platform used to organize daily life and work, measure total hours worked, and manage team productivity in one place.
+
+It is designed for:
+- Personal time tracking and life organization
+- Team time tracking across members
+- Clear visibility into who is working, for how long, and on what
+
+## Product Scope
+
+Voho Tracker combines:
+- Live timer and calendar-based time entries
+- Project-based work tracking with color-coded timelines
+- Team dashboards and member cards with daily totals
+- KPI management for team members
+- Pomodoro support for focused work sessions
+
+It also supports company-style usage through:
+- Settings and user profile management
+- Multi-member team workflows
+- A foundation for insights and company-level controls
 
 ## Getting Started
 
@@ -33,25 +52,28 @@ BOOTSTRAP_ADMIN_SECRET=your-bootstrap-secret
 
 ## Database Setup
 
-Run `supabase/schema.sql` in Supabase SQL editor, then run your migrations with Supabase CLI.
+Run `supabase/schema.sql` in Supabase SQL editor, then run migrations with Supabase CLI.
 
-## What Is Stored
+## Data Model
 
-- `public.members`: team member profiles
-- `public.projects`: project metadata and color
-- `public.time_entries`: normalized entry rows
-- `public.daily_member_stats`: day-level totals by member
-- `public.sync_events`: sync audit log
-- `public.api_quota_locks`: quota/cooldown lock state
+- `public.members`: member profiles, identity, and role metadata
+- `public.projects`: project metadata, type, and color
+- `public.time_entries`: all tracked time entries (running + completed)
+- `public.daily_member_stats`: daily aggregated totals by member
+- `public.member_kpis`: KPI rows by member
+- `public.project_aliases`: duplicate-project merge mapping
+- `public.sync_events`: operational sync/event logging
+- `public.api_quota_locks`: API lock/cooldown state (if enabled)
 
 ## Architecture
 
-- DB-first reads and writes
-- Immediate UI updates for start/stop/edit/delete flows
-- Server APIs under `src/app/api/*`
-- Shared timer + calendar UI in app components
+- Database-first reads and writes (Supabase as system of record)
+- API routes in `src/app/api/*`
+- Live event-driven UI updates for timer + calendar
+- Single shared platform shell for navigation and global timer state
 
-## Notes
+## Security Notes
 
-- No third-party time-tracking provider integration is required.
-- Keep Supabase service-role key server-only.
+- Keep `SUPABASE_SERVICE_ROLE_KEY` server-only.
+- Do not commit `.env.local`.
+- Rotate bootstrap/admin secrets before production or open-source release.

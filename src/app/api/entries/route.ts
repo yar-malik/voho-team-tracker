@@ -31,7 +31,7 @@ type EntriesPayload = {
 };
 
 type StoredEntryRow = {
-  toggl_entry_id: number;
+  entry_id: number;
   description: string | null;
   start_at: string;
   stop_at: string | null;
@@ -81,7 +81,7 @@ async function readStoredEntries(member: string, startIso: string, endIso: strin
 
   const url =
     `${base}/rest/v1/time_entries` +
-    `?select=toggl_entry_id,description,start_at,stop_at,duration_seconds,is_running,tags,project_key,synced_at` +
+    `?select=entry_id,description,start_at,stop_at,duration_seconds,is_running,tags,project_key,synced_at` +
     `&member_name=eq.${encodeURIComponent(member)}` +
     `&start_at=gte.${encodeURIComponent(startIso)}` +
     `&start_at=lte.${encodeURIComponent(endIso)}` +
@@ -136,7 +136,7 @@ async function readStoredEntries(member: string, startIso: string, endIso: strin
   const entries: StoredEntry[] = rows.map((row) => {
     const projectMeta = row.project_key ? projectMetaByKey.get(row.project_key) : null;
     return {
-      id: row.toggl_entry_id,
+      id: row.entry_id,
       description: row.description,
       start: row.start_at,
       stop: row.stop_at,
@@ -153,7 +153,7 @@ async function readStoredEntries(member: string, startIso: string, endIso: strin
       .filter((row) => row.is_running)
       .sort((a, b) => (a.start_at < b.start_at ? 1 : -1))
       .map((row) => ({
-        id: row.toggl_entry_id,
+        id: row.entry_id,
         description: row.description,
         start: row.start_at,
         stop: row.stop_at,

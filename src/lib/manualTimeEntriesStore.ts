@@ -3,7 +3,7 @@ import { canonicalizeMemberName, namesMatch } from "@/lib/memberNames";
 import { DEFAULT_PROJECT_COLOR } from "@/lib/projectColors";
 
 type StoredEntryRow = {
-  toggl_entry_id: number;
+  entry_id: number;
   member_name: string;
   description: string | null;
   start_at: string;
@@ -648,7 +648,7 @@ export async function getRunningEntry(memberName: string): Promise<RunningEntry 
 
   const url =
     `${getBaseUrl()}/rest/v1/time_entries` +
-    `?select=toggl_entry_id,member_name,description,start_at,duration_seconds,project_key,entry_source` +
+    `?select=entry_id,member_name,description,start_at,duration_seconds,project_key,entry_source` +
     `&member_name=eq.${encodeURIComponent(memberName)}` +
     `&is_running=eq.true` +
     `&order=start_at.desc&limit=1`;
@@ -681,7 +681,7 @@ export async function getRunningEntry(memberName: string): Promise<RunningEntry 
   }
 
   return {
-    id: row.toggl_entry_id,
+    id: row.entry_id,
     member: row.member_name,
     description: row.description,
     projectName,
@@ -761,7 +761,7 @@ export async function startManualTimer(input: {
   return {
     started: true,
     runningEntry: {
-      id: created.toggl_entry_id,
+      id: created.entry_id,
       member: created.member_name,
       description: created.description,
       projectName,
@@ -786,7 +786,7 @@ export async function stopManualTimer(input: { memberName: string; tzOffsetMinut
   const nowIso = now.toISOString();
   const tzOffsetMinutes = parseTzOffsetMinutes(input.tzOffsetMinutes);
   const rowsResponse = await fetch(
-    `${getBaseUrl()}/rest/v1/time_entries?select=toggl_entry_id,start_at&member_name=eq.${encodeURIComponent(
+    `${getBaseUrl()}/rest/v1/time_entries?select=entry_id,start_at&member_name=eq.${encodeURIComponent(
       input.memberName
     )}&is_running=eq.true&order=start_at.desc`,
     {
@@ -798,7 +798,7 @@ export async function stopManualTimer(input: { memberName: string; tzOffsetMinut
   if (!rowsResponse.ok) {
     throw new Error("Failed to load running timer rows");
   }
-  const runningRows = (await rowsResponse.json()) as Array<{ toggl_entry_id: number; start_at: string }>;
+  const runningRows = (await rowsResponse.json()) as Array<{ entry_id: number; start_at: string }>;
   if (runningRows.length === 0) {
     return { stopped: false, runningEntry: null as RunningEntry | null };
   }
@@ -807,7 +807,7 @@ export async function stopManualTimer(input: { memberName: string; tzOffsetMinut
     const startedAtMs = new Date(row.start_at).getTime();
     const durationSeconds = Number.isNaN(startedAtMs) ? 0 : Math.max(0, Math.floor((now.getTime() - startedAtMs) / 1000));
     const sourceDate = toLocalDateKey(new Date(row.start_at), tzOffsetMinutes);
-    const response = await fetch(`${getBaseUrl()}/rest/v1/time_entries?toggl_entry_id=eq.${row.toggl_entry_id}`, {
+    const response = await fetch(`${getBaseUrl()}/rest/v1/time_entries?entry_id=eq.${row.entry_id}`, {
       method: "PATCH",
       headers: {
         ...supabaseHeaders(),
@@ -859,7 +859,7 @@ export async function updateRunningEntryMetadata(input: {
   const { projectKey, projectName } = await ensureManualProject(input.projectName);
   const nowIso = new Date().toISOString();
 
-  const response = await fetch(`${getBaseUrl()}/rest/v1/time_entries?toggl_entry_id=eq.${running.id}`, {
+  const response = await fetch(`${getBaseUrl()}/rest/v1/time_entries?entry_id=eq.${running.id}`, {
     method: "PATCH",
     headers: {
       ...supabaseHeaders(),
@@ -888,7 +888,7 @@ export async function updateRunningEntryMetadata(input: {
   }
 
   return {
-    id: updated.toggl_entry_id,
+    id: updated.entry_id,
     member: updated.member_name,
     description: updated.description,
     projectName,
@@ -919,7 +919,7 @@ export async function backdateRunningEntry(input: {
   const { projectKey, projectName } = await ensureManualProject(input.projectName);
   const nowIso = new Date().toISOString();
 
-  const response = await fetch(`${getBaseUrl()}/rest/v1/time_entries?toggl_entry_id=eq.${running.id}`, {
+  const response = await fetch(`${getBaseUrl()}/rest/v1/time_entries?entry_id=eq.${running.id}`, {
     method: "PATCH",
     headers: {
       ...supabaseHeaders(),
@@ -951,7 +951,7 @@ export async function backdateRunningEntry(input: {
   }
 
   return {
-    id: updated.toggl_entry_id,
+    id: updated.entry_id,
     member: updated.member_name,
     description: updated.description,
     projectName,
@@ -1030,7 +1030,7 @@ export async function createManualTimeEntry(input: {
   }
 
   return {
-    id: created.toggl_entry_id,
+    id: created.entry_id,
     member: created.member_name,
     description: created.description,
     projectName,
@@ -1064,7 +1064,7 @@ export async function updateStoredTimeEntry(input: {
   }
 
   const existingResponse = await fetch(
-    `${getBaseUrl()}/rest/v1/time_entries?select=toggl_entry_id,member_name,entry_source,source_entry_id&toggl_entry_id=eq.${input.entryId}&limit=1`,
+    `${getBaseUrl()}/rest/v1/time_entries?select=entry_id,member_name,entry_source,source_entry_id&entry_id=eq.${input.entryId}&limit=1`,
     {
       method: "GET",
       headers: supabaseHeaders(),
@@ -1075,7 +1075,7 @@ export async function updateStoredTimeEntry(input: {
     throw new Error("Failed to read existing entry");
   }
   const existingRows = (await existingResponse.json()) as Array<{
-    toggl_entry_id: number;
+    entry_id: number;
     member_name: string;
     entry_source: string;
     source_entry_id: string | null;
@@ -1095,7 +1095,7 @@ export async function updateStoredTimeEntry(input: {
   const sourceDate = toLocalDateKey(startAt, tzOffsetMinutes);
   const nowIso = new Date().toISOString();
 
-  const updateResponse = await fetch(`${getBaseUrl()}/rest/v1/time_entries?toggl_entry_id=eq.${input.entryId}`, {
+  const updateResponse = await fetch(`${getBaseUrl()}/rest/v1/time_entries?entry_id=eq.${input.entryId}`, {
     method: "PATCH",
     headers: {
       ...supabaseHeaders(),
@@ -1128,7 +1128,7 @@ export async function updateStoredTimeEntry(input: {
   }
 
   return {
-    id: updated.toggl_entry_id,
+    id: updated.entry_id,
     member: updated.member_name,
     description: updated.description,
     projectName,
@@ -1148,7 +1148,7 @@ export async function deleteStoredTimeEntry(input: {
   }
 
   const existingResponse = await fetch(
-    `${getBaseUrl()}/rest/v1/time_entries?select=toggl_entry_id,member_name,is_running&toggl_entry_id=eq.${input.entryId}&limit=1`,
+    `${getBaseUrl()}/rest/v1/time_entries?select=entry_id,member_name,is_running&entry_id=eq.${input.entryId}&limit=1`,
     {
       method: "GET",
       headers: supabaseHeaders(),
@@ -1159,7 +1159,7 @@ export async function deleteStoredTimeEntry(input: {
     throw new Error("Failed to read existing entry");
   }
   const existingRows = (await existingResponse.json()) as Array<{
-    toggl_entry_id: number;
+    entry_id: number;
     member_name: string;
     is_running: boolean;
   }>;
@@ -1171,7 +1171,7 @@ export async function deleteStoredTimeEntry(input: {
     throw new Error("Entry does not belong to member");
   }
 
-  const deleteResponse = await fetch(`${getBaseUrl()}/rest/v1/time_entries?toggl_entry_id=eq.${input.entryId}`, {
+  const deleteResponse = await fetch(`${getBaseUrl()}/rest/v1/time_entries?entry_id=eq.${input.entryId}`, {
     method: "DELETE",
     headers: {
       ...supabaseHeaders(),

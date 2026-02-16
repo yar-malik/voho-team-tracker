@@ -30,7 +30,7 @@ type MemberPayload = {
 
 type StoredEntryRow = {
   member_name: string;
-  toggl_entry_id: number;
+  entry_id: number;
   description: string | null;
   start_at: string;
   stop_at: string | null;
@@ -93,7 +93,7 @@ async function readStoredTeam(
   const memberFilter = `in.(${quotedMembers})`;
   const url =
     `${base}/rest/v1/time_entries` +
-    `?select=member_name,toggl_entry_id,description,start_at,stop_at,duration_seconds,tags,project_key,synced_at` +
+    `?select=member_name,entry_id,description,start_at,stop_at,duration_seconds,tags,project_key,synced_at` +
     `&member_name=${encodeURIComponent(memberFilter)}` +
     `&start_at=gte.${encodeURIComponent(startIso)}` +
     `&start_at=lte.${encodeURIComponent(endIso)}` +
@@ -157,7 +157,7 @@ async function readStoredTeam(
     if (!bucket) continue;
     const projectMeta = row.project_key ? projectMetaByKey.get(row.project_key) : null;
     const entry: TimeEntry = {
-      id: row.toggl_entry_id,
+      id: row.entry_id,
       description: row.description,
       start: row.start_at,
       stop: row.stop_at,
