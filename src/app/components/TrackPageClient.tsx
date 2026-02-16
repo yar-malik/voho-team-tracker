@@ -164,6 +164,23 @@ function buildCalendarBlock(entry: TimeEntry, dayStartMs: number, hourHeight: nu
   };
 }
 
+function buildOptimisticRunningEntry(input: {
+  description?: string | null;
+  projectName?: string | null;
+  startAt?: string | null;
+}) {
+  const startAt = input.startAt ?? new Date().toISOString();
+  return {
+    id: -Math.max(1, Math.floor(new Date(startAt).getTime() / 1000)),
+    description: input.description ?? null,
+    start: startAt,
+    stop: null,
+    duration: -1,
+    project_name: input.projectName ?? null,
+    project_color: null,
+  } satisfies TimeEntry;
+}
+
 type CalendarBlock = NonNullable<ReturnType<typeof buildCalendarBlock>>;
 type DragMode = "move" | "resize-start" | "resize-end";
 type BlockDragState = {
@@ -249,7 +266,7 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
   const [teamHoursWarning, setTeamHoursWarning] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [nowMs, setNowMs] = useState(0);
+  const [nowMs, setNowMs] = useState(Date.now());
 
   const [modalProjectPickerOpen, setModalProjectPickerOpen] = useState(false);
   const [modalProjectSearch, setModalProjectSearch] = useState("");
@@ -291,6 +308,75 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
     const timer = window.setInterval(() => setNowMs(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    const onTimerChanged = (
+      event: Event
+    ) => {
+      const custom = event as CustomEvent<{
+        memberName?: string;
+        isRunning?: boolean;
+        startAt?: string | null;
+        durationSeconds?: number;
+        description?: string | null;
+        projectName?: string | null;
+      }>;
+      const detail = custom.detail;
+      if (!detail?.memberName) return;
+      if (detail.memberName.trim().toLowerCase() !== memberName.trim().toLowerCase()) return;
+
+      if (detail.isRunning) {
+        const optimistic = buildOptimisticRunningEntry({
+          description: detail.description ?? null,
+          projectName: detail.projectName ?? null,
+          startAt: detail.startAt ?? new Date().toISOString(),
+        });
+        setCurrentTimer({
+          id: optimistic.id,
+          description: optimistic.description,
+          projectName: optimistic.project_name ?? null,
+          startAt: optimistic.start,
+          durationSeconds: Math.max(0, Number(detail.durationSeconds ?? 0)),
+        });
+        setEntries((prev) => {
+          if (!prev) {
+            return { entries: [optimistic], totalSeconds: 0 };
+          }
+          const withoutRunning = prev.entries.filter((entry) => entry.stop !== null);
+          return {
+            ...prev,
+            entries: [...withoutRunning, optimistic].sort(
+              (a, b) => new Date(a.start).getTime() - new Date(b.start).getTime()
+            ),
+          };
+        });
+        return;
+      }
+
+      setCurrentTimer(null);
+      setEntries((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          entries: prev.entries.filter((entry) => entry.stop !== null),
+        };
+      });
+    };
+
+    const onEntriesChanged = (event: Event) => {
+      const custom = event as CustomEvent<{ memberName?: string }>;
+      const changedMember = custom.detail?.memberName?.trim().toLowerCase();
+      if (changedMember && changedMember !== memberName.trim().toLowerCase()) return;
+      setRefreshTick((value) => value + 1);
+    };
+
+    window.addEventListener("voho-timer-changed", onTimerChanged as EventListener);
+    window.addEventListener("voho-entries-changed", onEntriesChanged as EventListener);
+    return () => {
+      window.removeEventListener("voho-timer-changed", onTimerChanged as EventListener);
+      window.removeEventListener("voho-entries-changed", onEntriesChanged as EventListener);
+    };
+  }, [memberName]);
 
   useEffect(() => {
     if (!modalProjectPickerOpen) return;
