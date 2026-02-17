@@ -46,7 +46,6 @@ type TeamResponse = {
   error?: string;
 };
 
-type CalendarDraft = { hour: number; minute: number };
 type EntryEditorState = {
   entryId: number;
   description: string;
@@ -60,6 +59,8 @@ type EntryEditorState = {
 const CALENDAR_HOUR_HEIGHT = 56;
 const MIN_ENTRY_MINUTES = 15;
 const DRAG_SNAP_MINUTES = 5;
+const MAX_ENTRY_MINUTES = 120;
+const CLICK_CREATE_DEFAULT_MINUTES = 60;
 const ZOOM_LEVELS = [48, 56, 68, 80, 96, 112] as const;
 
 function createIdempotencyKey(prefix: string) {
@@ -278,8 +279,6 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
   const [modalProjectPickerOpen, setModalProjectPickerOpen] = useState(false);
   const [modalProjectSearch, setModalProjectSearch] = useState("");
   const [zoomLevel, setZoomLevel] = useState(ZOOM_LEVELS.length - 2);
-  const [calendarDraft, setCalendarDraft] = useState<CalendarDraft | null>(null);
-  const [draftDurationMinutes, setDraftDurationMinutes] = useState("60");
   const [entryEditor, setEntryEditor] = useState<EntryEditorState | null>(null);
   const [blockDrag, setBlockDrag] = useState<BlockDragState | null>(null);
   const modalProjectPickerRef = useRef<HTMLDivElement | null>(null);
@@ -436,13 +435,19 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
           const rawTop = prev.initialTop + (deltaMinutes / 60) * hourHeight;
           const maxTop = endPx - (MIN_ENTRY_MINUTES / 60) * hourHeight;
           const nextTop = Math.max(0, Math.min(maxTop, rawTop));
-          const nextHeight = Math.max((MIN_ENTRY_MINUTES / 60) * hourHeight, endPx - nextTop);
+          const nextHeight = Math.max(
+            (MIN_ENTRY_MINUTES / 60) * hourHeight,
+            Math.min((MAX_ENTRY_MINUTES / 60) * hourHeight, endPx - nextTop)
+          );
           return { ...prev, previewTop: nextTop, previewHeight: nextHeight };
         }
 
         const rawHeight = prev.initialHeight + (deltaMinutes / 60) * hourHeight;
         const maxHeight = 24 * hourHeight - prev.initialTop;
-        const nextHeight = Math.max((MIN_ENTRY_MINUTES / 60) * hourHeight, Math.min(maxHeight, rawHeight));
+        const nextHeight = Math.max(
+          (MIN_ENTRY_MINUTES / 60) * hourHeight,
+          Math.min(maxHeight, (MAX_ENTRY_MINUTES / 60) * hourHeight, rawHeight)
+        );
         return { ...prev, previewTop: prev.initialTop, previewHeight: nextHeight };
       });
     };
@@ -461,7 +466,7 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
       const nextStartMinute = Math.round((finalDrag.previewTop / hourHeight) * 60);
       const nextDurationMinutes = Math.max(
         MIN_ENTRY_MINUTES,
-        Math.round((finalDrag.previewHeight / hourHeight) * 60)
+        Math.min(MAX_ENTRY_MINUTES, Math.round((finalDrag.previewHeight / hourHeight) * 60))
       );
       const nextEndMinute = Math.min(24 * 60, nextStartMinute + nextDurationMinutes);
 
@@ -676,6 +681,47 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
     [projects, entryEditor?.project]
   );
 
+  async function createEntryAtPoint(clientY: number, containerEl: HTMLElement) {
+    const bounds = containerEl.getBoundingClientRect();
+    const relativeY = Math.max(0, Math.min(bounds.height, clientY - bounds.top));
+    const clickedMinute = Math.max(0, Math.min(24 * 60 - 1, snapMinutes((relativeY / hourHeight) * 60)));
+    const remainingMinutes = Math.max(1, 24 * 60 - clickedMinute);
+    const durationMinutes = Math.max(
+      MIN_ENTRY_MINUTES,
+      Math.min(MAX_ENTRY_MINUTES, CLICK_CREATE_DEFAULT_MINUTES, remainingMinutes)
+    );
+
+    setBusy(true);
+    setError(null);
+    try {
+      const startAt = minuteToIso(date, clickedMinute);
+      const res = await fetch("/api/time-entries/manual", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-idempotency-key": createIdempotencyKey("entry-manual"),
+        },
+        body: JSON.stringify({
+          member: memberName,
+          description: "",
+          project: "",
+          startAt,
+          durationMinutes,
+          tzOffset: new Date().getTimezoneOffset(),
+        }),
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok || data.error) throw new Error(data.error || "Failed to add entry");
+      setRefreshTick((v) => v + 1);
+      window.dispatchEvent(new CustomEvent("voho-entries-changed", { detail: { memberName } }));
+      window.dispatchEvent(new CustomEvent("voho-team-hours-changed"));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add entry");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function emitTimerChanged(detail: {
     memberName: string;
     isRunning: boolean;
@@ -802,72 +848,15 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
 
       <div className="min-h-[620px]">
         <section className="relative border-r border-slate-200">
-          {calendarDraft && (
-            <div className="border-b border-slate-200 bg-slate-50 px-4 py-2 text-sm">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="font-medium text-slate-700">
-                  Add entry at {String(calendarDraft.hour).padStart(2, "0")}:{String(calendarDraft.minute).padStart(2, "0")}
-                </span>
-                <input
-                  type="number"
-                  min={15}
-                  step={15}
-                  value={draftDurationMinutes}
-                  onChange={(event) => setDraftDurationMinutes(event.target.value)}
-                  className="w-[90px] rounded border border-slate-300 px-2 py-1"
-                />
-                <span className="text-slate-600">min</span>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={async () => {
-                    const mins = Number(draftDurationMinutes);
-                    if (!calendarDraft || !Number.isFinite(mins) || mins <= 0) {
-                      setError("Pick slot and valid duration");
-                      return;
-                    }
-                    setBusy(true);
-                    setError(null);
-                    try {
-                      const startAt = buildLocalDateTimeIso(date, calendarDraft.hour, calendarDraft.minute);
-                      const res = await fetch("/api/time-entries/manual", {
-                        method: "POST",
-                        headers: {
-                          "Content-Type": "application/json",
-                          "x-idempotency-key": createIdempotencyKey("entry-manual"),
-                        },
-                        body: JSON.stringify({
-                          member: memberName,
-                          description: "",
-                          project: "",
-                          startAt,
-                          durationMinutes: mins,
-                          tzOffset: new Date().getTimezoneOffset(),
-                        }),
-                      });
-                      const data = (await res.json()) as { error?: string };
-                      if (!res.ok || data.error) throw new Error(data.error || "Failed to add entry");
-                      setCalendarDraft(null);
-                      setRefreshTick((v) => v + 1);
-                    } catch (err) {
-                      setError(err instanceof Error ? err.message : "Failed to add entry");
-                    } finally {
-                      setBusy(false);
-                    }
-                  }}
-                  className="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:bg-slate-300"
-                >
-                  Add
-                </button>
-                <button type="button" onClick={() => setCalendarDraft(null)} className="rounded border border-slate-300 px-3 py-1.5 text-sm">
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
-
           <div ref={calendarScrollRef} className="relative max-h-[72vh] overflow-auto">
-            <div className="relative min-w-[820px]" style={{ height: `${24 * hourHeight}px` }}>
+            <div
+              className="relative min-w-[820px]"
+              style={{ height: `${24 * hourHeight}px` }}
+              onClick={(event) => {
+                if (event.target !== event.currentTarget) return;
+                void createEntryAtPoint(event.clientY, event.currentTarget);
+              }}
+            >
               <div className="absolute left-2 top-2 z-30 flex items-center gap-1 rounded-lg border border-slate-200 bg-white/95 p-1 shadow-sm">
                 <button
                   type="button"
@@ -890,15 +879,13 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
               </div>
 
               {hours.map((hour) => (
-                <button
+                <div
                   key={hour}
-                  type="button"
-                  onClick={() => setCalendarDraft({ hour, minute: 0 })}
-                  className="absolute left-0 right-0 border-b border-slate-100 text-left hover:bg-slate-50"
+                  className="pointer-events-none absolute left-0 right-0 border-b border-slate-100"
                   style={{ top: `${hour * hourHeight}px`, height: `${hourHeight}px` }}
                 >
                   <span className="absolute left-3 top-1 text-xs text-slate-500">{String(hour).padStart(2, "0")}:00</span>
-                </button>
+                </div>
               ))}
 
               {calendarBlocks.map((block) => {
