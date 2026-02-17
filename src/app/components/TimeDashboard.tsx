@@ -540,7 +540,7 @@ export default function TimeDashboard({
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [modalProjectPickerOpen, setModalProjectPickerOpen] = useState(false);
   const [modalProjectSearch, setModalProjectSearch] = useState("");
-  const [rankingView, setRankingView] = useState<"daily" | "weekly" | "monthly" | "anomaly">("daily");
+  const [rankingView, setRankingView] = useState<"daily" | "weekly" | "monthly">("daily");
   const [selectedAnomalyMember, setSelectedAnomalyMember] = useState<string | null>(null);
   const [blockDrag, setBlockDrag] = useState<BlockDragState | null>(null);
   const dayCalendarScrollRef = useRef<HTMLDivElement | null>(null);
@@ -1289,6 +1289,66 @@ export default function TimeDashboard({
       value: Math.round((monthlyRankingMaxHours * step) / 4),
     }));
   }, [monthlyRankingMaxHours]);
+  const rankingMemberTabs = useMemo(() => {
+    if (!teamData) return [] as string[];
+    return [...teamData.members]
+      .filter((memberData) => {
+        if (selectedMembersLower.size === 0) return true;
+        return selectedMembersLower.has(memberData.name.trim().toLowerCase());
+      })
+      .map((memberData) => memberData.name)
+      .sort((a, b) => {
+        const aIsYar = a.trim().toLowerCase() === "yar";
+        const bIsYar = b.trim().toLowerCase() === "yar";
+        if (aIsYar && !bIsYar) return -1;
+        if (!aIsYar && bIsYar) return 1;
+        return a.localeCompare(b);
+      });
+  }, [teamData, selectedMembersLower]);
+
+  useEffect(() => {
+    if (rankingMemberTabs.length === 0) {
+      setSelectedAnomalyMember(null);
+      return;
+    }
+    setSelectedAnomalyMember((previous) => {
+      if (previous && rankingMemberTabs.includes(previous)) return previous;
+      return rankingMemberTabs[0];
+    });
+  }, [rankingMemberTabs]);
+
+  const filteredDailyRankingSeries = useMemo(() => {
+    if (!selectedAnomalyMember) return dailyRankingSeries;
+    return dailyRankingSeries.filter((row) => row.name === selectedAnomalyMember);
+  }, [dailyRankingSeries, selectedAnomalyMember]);
+
+  const filteredWeeklyRankingSeries = useMemo(() => {
+    if (!selectedAnomalyMember) return weeklyRankingSeries;
+    return weeklyRankingSeries.filter((row) => row.name === selectedAnomalyMember);
+  }, [weeklyRankingSeries, selectedAnomalyMember]);
+
+  const filteredMonthlyRankingSeries = useMemo(() => {
+    if (!selectedAnomalyMember) return monthlyRankingSeries;
+    return monthlyRankingSeries.filter((row) => row.name === selectedAnomalyMember);
+  }, [monthlyRankingSeries, selectedAnomalyMember]);
+
+  const activeRankingSeries = useMemo(() => {
+    if (rankingView === "daily") return filteredDailyRankingSeries;
+    if (rankingView === "weekly") return filteredWeeklyRankingSeries;
+    return filteredMonthlyRankingSeries;
+  }, [rankingView, filteredDailyRankingSeries, filteredWeeklyRankingSeries, filteredMonthlyRankingSeries]);
+
+  const activeRankingMaxHours = useMemo(() => {
+    const maxSeconds = activeRankingSeries.reduce((max, row) => Math.max(max, row.seconds), 0);
+    return Math.max(1, Math.ceil(maxSeconds / 3600));
+  }, [activeRankingSeries]);
+
+  const activeRankingAxisTicks = useMemo(() => {
+    return [4, 3, 2, 1, 0].map((step) => ({
+      step,
+      value: Math.round((activeRankingMaxHours * step) / 4),
+    }));
+  }, [activeRankingMaxHours]);
   const anomalyMembers = useMemo(() => {
     if (!teamWeekData) return [] as Array<{ name: string; days: Array<{ date: string; seconds: number; entryCount: number }> }>;
     return teamWeekData.members
@@ -1305,17 +1365,6 @@ export default function TimeDashboard({
       })
       .map((member) => ({ name: member.name, days: member.days }));
   }, [teamWeekData, selectedMembersLower]);
-
-  useEffect(() => {
-    if (anomalyMembers.length === 0) {
-      setSelectedAnomalyMember(null);
-      return;
-    }
-    setSelectedAnomalyMember((previous) => {
-      if (previous && anomalyMembers.some((member) => member.name === previous)) return previous;
-      return anomalyMembers[0].name;
-    });
-  }, [anomalyMembers]);
 
   const anomalyMember = useMemo(
     () => anomalyMembers.find((member) => member.name === selectedAnomalyMember) ?? null,
@@ -1776,39 +1825,25 @@ export default function TimeDashboard({
                 >
                   Monthly
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setRankingView("anomaly")}
-                  className={`rounded-md px-3 py-1.5 text-xs font-semibold ${
-                    rankingView === "anomaly" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600"
-                  }`}
-                >
-                  7-day bar chart
-                </button>
-                {rankingView === "anomaly" &&
-                  anomalyMembers.map((member) => (
-                    <button
-                      key={`anomaly-top-tab-${member.name}`}
-                      type="button"
-                      onClick={() => setSelectedAnomalyMember(member.name)}
-                      className={`rounded-md px-3 py-1.5 text-xs font-semibold ${
-                        selectedAnomalyMember === member.name
-                          ? "bg-sky-100 text-sky-800 shadow-sm"
-                          : "text-slate-600 hover:bg-slate-100"
-                      }`}
-                    >
-                      {member.name}
-                    </button>
-                  ))}
+                {rankingMemberTabs.map((memberName) => (
+                  <button
+                    key={`ranking-member-tab-${memberName}`}
+                    type="button"
+                    onClick={() => setSelectedAnomalyMember(memberName)}
+                    className={`rounded-md px-3 py-1.5 text-xs font-semibold ${
+                      selectedAnomalyMember === memberName
+                        ? "bg-sky-100 text-sky-800 shadow-sm"
+                        : "text-slate-600 hover:bg-slate-100"
+                    }`}
+                  >
+                    {memberName}
+                  </button>
+                ))}
               </div>
               <span className="text-xs text-slate-500">
                 {rankingView === "daily"
                   ? date
                   : rankingView === "weekly"
-                  ? teamWeekData
-                    ? `${teamWeekData.startDate} → ${teamWeekData.endDate}`
-                    : "Last 7 days"
-                  : rankingView === "anomaly"
                   ? teamWeekData
                     ? `${teamWeekData.startDate} → ${teamWeekData.endDate}`
                     : "Last 7 days"
@@ -1818,97 +1853,17 @@ export default function TimeDashboard({
               </span>
             </div>
             {(rankingView === "daily"
-              ? dailyRankingSeries.length === 0
+              ? filteredDailyRankingSeries.length === 0
               : rankingView === "weekly"
-              ? weeklyRankingSeries.length === 0
-              : rankingView === "monthly"
-              ? monthlyRankingSeries.length === 0
-              : anomalyMembers.length === 0) ? (
+              ? filteredWeeklyRankingSeries.length === 0
+              : filteredMonthlyRankingSeries.length === 0) ? (
               <p className="mt-3 text-sm text-slate-500">
-                No {rankingView === "anomaly" ? "7-day bar chart" : rankingView} data yet.
+                No {rankingView} data yet.
               </p>
-            ) : rankingView === "anomaly" ? (
-              <>
-                <div className="mt-3 grid grid-cols-[3.2rem_1fr] gap-2">
-                  <div className="relative h-44">
-                    {anomalyAxisTicks.map((tick) => (
-                      <div
-                        key={`anomaly-${tick.step}`}
-                        className="absolute right-0 text-[10px] font-medium text-slate-500"
-                        style={{ top: `${(4 - tick.step) * 25}%`, transform: "translateY(-50%)" }}
-                      >
-                        {tick.value}h
-                      </div>
-                    ))}
-                  </div>
-                  <div className="relative h-44 rounded-lg border border-slate-200 bg-slate-50 px-2 pt-2">
-                    {[0, 1, 2, 3, 4].map((step) => (
-                      <div
-                        key={`anomaly-grid-${step}`}
-                        className="absolute left-0 right-0 border-t border-slate-200"
-                        style={{ top: `${step * 25}%` }}
-                      />
-                    ))}
-                    <div
-                      className="absolute left-0 right-0 border-t border-rose-300 border-dashed"
-                      style={{ top: `${100 - (Math.min(12, anomalyMaxHours) / anomalyMaxHours) * 100}%` }}
-                      title="12h anomaly threshold"
-                    />
-                    <div className="relative z-10 grid h-full grid-cols-7 items-end gap-2 pb-1">
-                      {(teamWeekData?.weekDates ?? []).map((day) => (
-                        <div key={`anomaly-day-${day}`} className="flex h-full min-w-0 flex-col items-center justify-end gap-1">
-                          <div className="flex h-full items-end gap-px">
-                          {anomalyMember ? (() => {
-                              const point = anomalyMember.days.find((item) => item.date === day);
-                              const seconds = point?.seconds ?? 0;
-                              const hours = seconds / 3600;
-                              const heightPercent = Math.max(2, (hours / anomalyMaxHours) * 100);
-                              const anomaly = hours > 12;
-                              return (
-                                <div
-                                  key={`${day}-${anomalyMember.name}`}
-                                  className={`rounded-t-sm ${anomaly ? "bg-rose-500" : ""}`}
-                                  style={{
-                                    width: `${anomalyBarWidthPx}px`,
-                                    height: `${heightPercent}%`,
-                                    backgroundColor: anomaly ? undefined : anomalyMemberColors.get(anomalyMember.name) ?? "#64748b",
-                                  }}
-                                  title={`${anomalyMember.name} • ${day} • ${formatDuration(seconds)}${anomaly ? " • Possible anomaly" : ""}`}
-                                  onMouseEnter={(event) =>
-                                    placeHoverTooltip(
-                                      event,
-                                      `${anomalyMember.name}\n${day}\nHours worked: ${formatDuration(seconds)}${anomaly ? "\nPossible anomaly (>12h)" : ""}`
-                                    )
-                                  }
-                                  onMouseMove={(event) =>
-                                    placeHoverTooltip(
-                                      event,
-                                      `${anomalyMember.name}\n${day}\nHours worked: ${formatDuration(seconds)}${anomaly ? "\nPossible anomaly (>12h)" : ""}`
-                                    )
-                                  }
-                                  onMouseLeave={hideHoverTooltip}
-                                />
-                              );
-                            })() : null}
-                          </div>
-                          <p className="w-full truncate text-center text-[10px] font-semibold text-slate-700">
-                            {new Date(`${day}T00:00:00`).toLocaleDateString([], { weekday: "short", day: "2-digit" })}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </>
             ) : (
               <div className="mt-3 grid grid-cols-[3.2rem_1fr] gap-2">
                 <div className="relative h-40">
-                  {(rankingView === "daily"
-                    ? dailyRankingAxisTicks
-                    : rankingView === "weekly"
-                    ? weeklyRankingAxisTicks
-                    : monthlyRankingAxisTicks
-                  ).map((tick) => (
+                  {activeRankingAxisTicks.map((tick) => (
                     <div
                       key={`${rankingView}-${tick.step}`}
                       className="absolute right-0 text-[10px] font-medium text-slate-500"
@@ -1927,20 +1882,9 @@ export default function TimeDashboard({
                     />
                   ))}
                   <div className="relative z-10 flex h-full items-end gap-2">
-                    {(rankingView === "daily"
-                      ? dailyRankingSeries
-                      : rankingView === "weekly"
-                      ? weeklyRankingSeries
-                      : monthlyRankingSeries
-                    ).map((row) => {
-                      const maxHours =
-                        rankingView === "daily"
-                          ? dailyRankingMaxHours
-                          : rankingView === "weekly"
-                          ? weeklyRankingMaxHours
-                          : monthlyRankingMaxHours;
+                    {activeRankingSeries.map((row) => {
                       const hours = row.seconds / 3600;
-                      const heightPercent = Math.max(6, (hours / maxHours) * 100);
+                      const heightPercent = Math.max(6, (hours / activeRankingMaxHours) * 100);
                       const label =
                         rankingView === "daily"
                           ? "Total hours worked"
