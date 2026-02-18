@@ -4,6 +4,7 @@ function isPublicPath(pathname: string) {
   if (pathname === "/login") return true;
   if (pathname.startsWith("/api/auth/")) return true;
   if (pathname === "/api/admin/bootstrap-users") return true;
+  if (pathname.startsWith("/api/")) return true; // API routes handle their own auth
   if (pathname.startsWith("/_next/")) return true;
   if (pathname === "/favicon.ico") return true;
   return false;

@@ -69,6 +69,7 @@ export async function POST(request: NextRequest) {
     });
     return NextResponse.json(responseBody);
   } catch (error) {
+    console.error("[time-entries/stop] Error:", error);
     const message = error instanceof Error ? error.message : "Failed to stop timer";
     const responseBody = { error: message };
     await writeIdempotentResponse({
