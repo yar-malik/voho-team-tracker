@@ -1861,7 +1861,72 @@ export default function TimeDashboard({
                   : "Last 30 days"}
               </span>
             </div>
-            {(rankingView === "daily"
+            {selectedAnomalyMember ? (
+              // Show 7-day daily breakdown when a member is selected
+              <div className="mt-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-sm font-medium text-slate-700">{selectedAnomalyMember} — Last 7 days breakdown</span>
+                  <span className="text-xs text-slate-500">
+                    {teamWeekData ? `${teamWeekData.startDate} → ${teamWeekData.endDate}` : "Last 7 days"}
+                  </span>
+                </div>
+                {(() => {
+                  const memberData = teamWeekData?.members.find((m) => m.name === selectedAnomalyMember);
+                  if (!memberData || !teamWeekData) {
+                    return <p className="text-sm text-slate-500">No weekly data available.</p>;
+                  }
+                  const days = teamWeekData.weekDates.map((date) => ({
+                    date,
+                    seconds: memberData.days.find((d) => d.date === date)?.seconds ?? 0,
+                  }));
+                  const maxSeconds = days.reduce((max, d) => Math.max(max, d.seconds), 0);
+                  const maxHours = Math.max(1, Math.ceil(maxSeconds / 3600));
+                  return (
+                    <div className="grid grid-cols-[3.2rem_1fr] gap-2">
+                      <div className="relative h-40">
+                        {[4, 3, 2, 1, 0].map((step) => (
+                          <div
+                            key={`day-axis-${step}`}
+                            className="absolute right-0 text-[10px] font-medium text-slate-500"
+                            style={{ top: `${(4 - step) * 25}%`, transform: "translateY(-50%)" }}
+                          >
+                            {Math.round((maxHours * step) / 4)}h
+                          </div>
+                        ))}
+                      </div>
+                      <div className="relative h-40 rounded-lg border border-slate-200 bg-slate-50 px-2 pt-2">
+                        {[0, 1, 2, 3, 4].map((step) => (
+                          <div
+                            key={`day-grid-${step}`}
+                            className="absolute left-0 right-0 border-t border-slate-200"
+                            style={{ top: `${step * 25}%` }}
+                          />
+                        ))}
+                        <div className="relative z-10 flex h-full items-end gap-2">
+                          {days.map((day) => {
+                            const hours = day.seconds / 3600;
+                            const heightPercent = maxSeconds > 0 ? Math.max(6, (hours / maxHours) * 100) : 6;
+                            return (
+                              <div key={day.date} className="flex h-full min-w-[56px] flex-1 flex-col items-center justify-end gap-1">
+                                <div
+                                  className="w-full rounded-t-md bg-gradient-to-t from-sky-600 to-cyan-400 transition-all duration-200 hover:from-sky-500 hover:to-cyan-300"
+                                  style={{ height: `${heightPercent}%` }}
+                                  title={`${formatShortDateLabel(day.date)}: ${formatDuration(day.seconds)}`}
+                                  onMouseEnter={(event) => placeHoverTooltip(event, `${formatShortDateLabel(day.date)}\n${formatDuration(day.seconds)}`)}
+                                  onMouseMove={(event) => placeHoverTooltip(event, `${formatShortDateLabel(day.date)}\n${formatDuration(day.seconds)}`)}
+                                  onMouseLeave={hideHoverTooltip}
+                                />
+                                <p className="w-full truncate text-center text-[11px] font-semibold text-slate-700">{formatShortDateLabel(day.date)}</p>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            ) : (rankingView === "daily"
               ? filteredDailyRankingSeries.length === 0
               : rankingView === "weekly"
               ? filteredWeeklyRankingSeries.length === 0

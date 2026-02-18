@@ -39,6 +39,19 @@ type MemberProfileResponse = {
   error?: string;
 };
 
+type TeamWeekResponse = {
+  startDate: string;
+  endDate: string;
+  weekDates: string[];
+  members: Array<{
+    name: string;
+    totalSeconds: number;
+    entryCount: number;
+    days: Array<{ date: string; seconds: number; entryCount: number }>;
+  }>;
+  error?: string;
+};
+
 function formatDuration(totalSeconds: number): string {
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
@@ -52,6 +65,12 @@ function formatTime(iso: string | null | undefined): string {
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
+function formatShortDateLabel(dateInput: string): string {
+  const date = new Date(`${dateInput}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return dateInput;
+  return date.toLocaleDateString([], { weekday: "short", month: "numeric", day: "numeric" });
+}
+
 export default function MemberProfilePageClient({
   memberName,
   initialDate,
@@ -62,6 +81,7 @@ export default function MemberProfilePageClient({
   const [date, setDate] = useState(initialDate);
   const [entries, setEntries] = useState<EntriesResponse | null>(null);
   const [profilePayload, setProfilePayload] = useState<MemberProfileResponse | null>(null);
+  const [weekData, setWeekData] = useState<TeamWeekResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -84,11 +104,17 @@ export default function MemberProfilePageClient({
         if (!res.ok || data.error) throw new Error(data.error || "Failed to load profile");
         return data;
       }),
+      fetch(`/api/team-week?date=${encodeURIComponent(date)}&_req=${Date.now()}`, { cache: "no-store" }).then(async (res) => {
+        const data = (await res.json()) as TeamWeekResponse;
+        if (!res.ok || data.error) throw new Error(data.error || "Failed to load week data");
+        return data;
+      }),
     ])
-      .then(([entriesData, profileData]) => {
+      .then(([entriesData, profileData, weekDataResponse]) => {
         if (!active) return;
         setEntries(entriesData);
         setProfilePayload(profileData);
+        setWeekData(weekDataResponse);
         setError(null);
       })
       .catch((err: Error) => {
@@ -114,6 +140,21 @@ export default function MemberProfilePageClient({
       activeDays: `${profile.activeDays}/7`,
     };
   }, [profile]);
+
+  const memberWeekSeries = useMemo(() => {
+    if (!weekData || !memberName) return [] as Array<{ date: string; seconds: number }>;
+    const memberData = weekData.members.find((m) => m.name.toLowerCase() === memberName.toLowerCase());
+    if (!memberData) return [] as Array<{ date: string; seconds: number }>;
+    return weekData.weekDates.map((day) => ({
+      date: day,
+      seconds: memberData.days.find((d) => d.date === day)?.seconds ?? 0,
+    }));
+  }, [weekData, memberName]);
+
+  const memberWeekMaxSeconds = useMemo(
+    () => memberWeekSeries.reduce((max, item) => Math.max(max, item.seconds), 0),
+    [memberWeekSeries]
+  );
 
   return (
     <div className="space-y-4">
@@ -156,6 +197,32 @@ export default function MemberProfilePageClient({
           <p className="text-xs uppercase tracking-wide text-slate-500">Active days</p>
           <p className="mt-1 text-xl font-semibold text-slate-900">{stats.activeDays}</p>
         </div>
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h2 className="text-lg font-semibold text-slate-900">Last 7 days</h2>
+        <p className="mt-1 text-sm text-slate-600">Daily worked hours for {memberName}.</p>
+        {memberWeekSeries.length === 0 ? (
+          <p className="mt-3 text-sm text-slate-500">No weekly data yet.</p>
+        ) : (
+          <div className="mt-4">
+            <div className="flex h-48 items-end gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              {memberWeekSeries.map((item) => {
+                const barHeight = memberWeekMaxSeconds > 0 ? Math.max(12, Math.round((item.seconds / memberWeekMaxSeconds) * 100)) : 12;
+                return (
+                  <div key={item.date} className="flex w-full flex-col items-center gap-2">
+                    <div
+                      className="w-full rounded-t-md bg-gradient-to-t from-sky-600 to-cyan-400 transition-all duration-300 hover:from-sky-500 hover:to-cyan-300"
+                      style={{ height: `${barHeight}%` }}
+                      title={`${formatShortDateLabel(item.date)}: ${formatDuration(item.seconds)}`}
+                    />
+                    <p className="text-[11px] font-medium text-slate-600">{formatShortDateLabel(item.date)}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
