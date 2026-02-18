@@ -1204,7 +1204,11 @@ export default function TimeDashboard({
 
   const timeline = useMemo(() => {
     if (!data) return { blocks: [] as TimelineBlock[], maxLanes: 1 };
-    return buildTimelineBlocks(data.entries, date, relativeNowMs);
+    // Include running entry in timeline blocks for live display
+    const entriesWithCurrent = data.current
+      ? [...data.entries, { ...data.current, id: data.current.id ?? -1 }]
+      : data.entries;
+    return buildTimelineBlocks(entriesWithCurrent, date, relativeNowMs);
   }, [data, date, relativeNowMs]);
 
   const teamRanking = useMemo(() => {
@@ -1435,10 +1439,16 @@ export default function TimeDashboard({
       if (!aIsYar && bIsYar) return 1;
       return a.name.localeCompare(b.name);
       });
-    return orderedMembers.map((memberData) => ({
-      name: memberData.name,
-      ...buildTimelineBlocks(memberData.entries, date, relativeNowMs),
-    }));
+    return orderedMembers.map((memberData) => {
+      // Include running entry in team timeline blocks for live display
+      const entriesWithCurrent = memberData.current
+        ? [...memberData.entries, { ...memberData.current, id: memberData.current.id ?? -1 }]
+        : memberData.entries;
+      return {
+        name: memberData.name,
+        ...buildTimelineBlocks(entriesWithCurrent, date, relativeNowMs),
+      };
+    });
   }, [teamData, date, selectedMembersLower, relativeNowMs]);
 
   const visibleTeamEntries = useMemo(() => {
