@@ -506,6 +506,33 @@ export default function TimeDashboard({
   const defaultMember = members[0]?.name ?? "";
   const [member, setMember] = useState(defaultMember);
   const [date, setDate] = useState(formatDateInput(new Date()));
+
+  // Auto-update date when day changes
+  useEffect(() => {
+    const checkDateChange = () => {
+      const currentDate = formatDateInput(new Date());
+      if (currentDate !== date) {
+        setDate(currentDate);
+      }
+    };
+
+    // Check every minute for date changes
+    const interval = setInterval(checkDateChange, 60000);
+    
+    // Also check when window becomes visible (user returns to tab)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        checkDateChange();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [date]);
+
   const [search, setSearch] = useState("");
   const [filterName, setFilterName] = useState("");
   const [savedFilters, setSavedFilters] = useState<SavedFilter[]>([]);
