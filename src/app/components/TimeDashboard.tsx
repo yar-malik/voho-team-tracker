@@ -1313,7 +1313,7 @@ export default function TimeDashboard({
     }
     setSelectedAnomalyMember((previous) => {
       if (previous && rankingMemberTabs.includes(previous)) return previous;
-      return rankingMemberTabs[0];
+      return null;
     });
   }, [rankingMemberTabs]);
 
@@ -1824,6 +1824,15 @@ export default function TimeDashboard({
                   }`}
                 >
                   Monthly
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedAnomalyMember(null)}
+                  className={`rounded-md px-3 py-1.5 text-xs font-semibold ${
+                    selectedAnomalyMember === null ? "bg-sky-100 text-sky-800 shadow-sm" : "text-slate-600 hover:bg-slate-100"
+                  }`}
+                >
+                  All
                 </button>
                 {rankingMemberTabs.map((memberName) => (
                   <button
