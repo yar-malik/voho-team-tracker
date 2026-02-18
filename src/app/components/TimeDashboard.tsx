@@ -1795,7 +1795,7 @@ export default function TimeDashboard({
           </div>
         )}
         {(mode === "all" || mode === "team") && (
-          <div className="md:col-span-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
+          <div className="col-span-full rounded-xl border border-slate-200 bg-white px-4 py-3">
             <div className="flex items-center justify-between gap-2">
               <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
                 <button
