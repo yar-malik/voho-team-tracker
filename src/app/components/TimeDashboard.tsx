@@ -1609,7 +1609,9 @@ export default function TimeDashboard({
       window.dispatchEvent(new CustomEvent("voho-entries-changed", { detail: { memberName } }));
       window.dispatchEvent(new CustomEvent("voho-team-hours-changed"));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create time slot");
+      const errorMessage = err instanceof Error ? err.message : "Failed to create time slot";
+      console.error("[Calendar Click Error]", errorMessage, err);
+      setError(errorMessage);
     }
   };
 
