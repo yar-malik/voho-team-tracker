@@ -1582,6 +1582,7 @@ export default function TimeDashboard({
     clientY: number,
     containerEl: HTMLElement
   ) => {
+    console.log("[DEBUG] Calendar click started", { memberName, clientY });
     const bounds = containerEl.getBoundingClientRect();
     const relativeY = Math.max(0, Math.min(bounds.height, clientY - bounds.top));
     const clickedMinute = Math.max(0, Math.min(24 * 60 - 1, snapMinutes((relativeY / HOUR_HEIGHT) * 60)));
@@ -1590,6 +1591,7 @@ export default function TimeDashboard({
       CLICK_CREATE_MAX_MINUTES,
       Math.max(CLICK_CREATE_MIN_MINUTES, Math.min(CLICK_CREATE_DEFAULT_MINUTES, remainingMinutes))
     );
+    console.log("[DEBUG] Creating entry", { clickedMinute, durationMinutes, date });
 
     try {
       const res = await fetch("/api/time-entries/manual", {
@@ -1604,10 +1606,13 @@ export default function TimeDashboard({
           tzOffset: new Date().getTimezoneOffset(),
         }),
       });
+      console.log("[DEBUG] API response status:", res.status);
       const payload = (await res.json()) as { error?: string };
+      console.log("[DEBUG] API response payload:", payload);
       if (!res.ok || payload.error) throw new Error(payload.error || "Failed to create time slot");
       window.dispatchEvent(new CustomEvent("voho-entries-changed", { detail: { memberName } }));
       window.dispatchEvent(new CustomEvent("voho-team-hours-changed"));
+      console.log("[DEBUG] Entry created successfully");
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Failed to create time slot";
       console.error("[Calendar Click Error]", errorMessage, err);
