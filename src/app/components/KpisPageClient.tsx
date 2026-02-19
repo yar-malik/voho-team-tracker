@@ -26,15 +26,15 @@ export default function KpisPageClient({
   );
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <h1 className="text-2xl font-semibold text-slate-900">KPIs</h1>
+    <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+      <h1 className="text-xl font-bold text-slate-800">KPIs</h1>
       <p className="mt-1 text-sm text-slate-600">Member KPI registry managed inside the platform.</p>
 
       <div className="mt-4 grid gap-2 md:grid-cols-2">
         <select
           value={member}
           onChange={(event) => setMember(event.target.value)}
-          className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          className="input text-sm"
         >
           {members.map((item) => (
             <option key={item.name} value={item.name}>
@@ -47,21 +47,21 @@ export default function KpisPageClient({
           value={label}
           onChange={(event) => setLabel(event.target.value)}
           placeholder="KPI label"
-          className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          className="input text-sm"
         />
         <input
           type="text"
           value={value}
           onChange={(event) => setValue(event.target.value)}
           placeholder="KPI value"
-          className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          className="input text-sm"
         />
         <input
           type="text"
           value={notes}
           onChange={(event) => setNotes(event.target.value)}
           placeholder="Notes"
-          className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          className="input text-sm"
         />
         <button
           type="button"
@@ -93,7 +93,7 @@ export default function KpisPageClient({
               setBusy(false);
             }
           }}
-          className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-400"
+          className="btn-primary text-sm"
         >
           Save KPI
         </button>
@@ -113,7 +113,7 @@ export default function KpisPageClient({
           </thead>
           <tbody>
             {sortedKpis.map((kpi) => (
-              <tr key={kpi.id} className="border-t border-slate-100">
+              <tr key={kpi.id} className="border-t border-slate-100 hover:bg-slate-50 transition-colors">
                 <td className="px-4 py-2 font-medium text-slate-900">{kpi.member}</td>
                 <td className="px-4 py-2 text-slate-700">{kpi.label}</td>
                 <td className="px-4 py-2 text-slate-700">{kpi.value}</td>

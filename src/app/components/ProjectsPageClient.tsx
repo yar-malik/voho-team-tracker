@@ -79,13 +79,13 @@ function ProjectModal({
   const selectedColor = normalizeColor(state.color);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/35 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in" onClick={onClose}>
       <div
-        className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl"
+        className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-6 shadow-xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-start justify-between">
-          <h2 className="text-xl font-semibold text-slate-900">{title}</h2>
+          <h2 className="text-xl font-bold text-slate-800">{title}</h2>
           <button
             type="button"
             onClick={onClose}
@@ -106,7 +106,7 @@ function ProjectModal({
                 value={state.name}
                 onChange={(event) => onChange({ ...state, name: event.target.value })}
                 placeholder="Project name"
-                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-lg font-semibold text-slate-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                className="input text-base font-medium"
               />
             </div>
           </label>
@@ -156,7 +156,7 @@ function ProjectModal({
             type="button"
             disabled={busy}
             onClick={() => void onSave()}
-            className="rounded-xl bg-[#0BA5E9] px-8 py-3 text-base font-semibold text-white hover:bg-[#0994cf] disabled:bg-slate-300"
+            className="btn-primary"
           >
             {busy ? "Saving..." : "Save"}
           </button>
@@ -188,14 +188,14 @@ export default function ProjectsPageClient({ initialProjects }: { initialProject
   );
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="border-b border-slate-200 px-6 py-5">
+    <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="border-b border-slate-200 px-6 py-5 bg-slate-50/50">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-3xl font-semibold text-slate-900">Projects</h1>
+          <h1 className="text-2xl font-bold text-slate-800">Projects</h1>
           <button
             type="button"
             onClick={() => setCreating({ key: "", name: "", color: DEFAULT_PROJECT_COLOR, projectType: "work" })}
-            className="rounded-xl bg-[#0BA5E9] px-4 py-2 text-sm font-semibold text-white hover:bg-[#0994cf]"
+            className="btn-primary"
           >
             + New project
           </button>
@@ -209,7 +209,7 @@ export default function ProjectsPageClient({ initialProjects }: { initialProject
           >
             {showArchived ? "Show active only" : "Show all, including archived"}
           </button>
-          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Filters:</span>
+          <span className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Filters:</span>
           <span className="rounded-md bg-slate-100 px-2.5 py-1 text-slate-700">Member</span>
           <span className="rounded-md bg-slate-100 px-2.5 py-1 text-slate-700">Project name</span>
         </div>
@@ -223,7 +223,7 @@ export default function ProjectsPageClient({ initialProjects }: { initialProject
 
       <div className="overflow-auto">
         <table className="min-w-full text-sm">
-          <thead className="border-y border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+          <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
             <tr>
               <th className="px-6 py-3">Project</th>
               <th className="px-6 py-3">Type</th>
@@ -254,10 +254,10 @@ export default function ProjectsPageClient({ initialProjects }: { initialProject
                     {project.name}
                   </div>
                 </td>
-                <td className="px-6 py-3 text-slate-600">{project.projectType === "non_work" ? "Non-Work" : "Work"}</td>
-                <td className="px-6 py-3 text-slate-600">{project.archived ? "Archived" : "Active"}</td>
-                <td className="px-6 py-3 text-slate-600">{formatHours(project.totalSeconds || 0)}</td>
-                <td className="px-6 py-3 text-slate-600">{project.entryCount || 0}</td>
+                <td className="px-6 py-3 text-slate-500">{project.projectType === "non_work" ? "Non-Work" : "Work"}</td>
+                <td className="px-6 py-3 text-slate-500">{project.archived ? "Archived" : "Active"}</td>
+                <td className="px-6 py-3 text-slate-500">{formatHours(project.totalSeconds || 0)}</td>
+                <td className="px-6 py-3 text-slate-500">{project.entryCount || 0}</td>
                 <td className="px-6 py-3 text-right">
                   <div className="inline-flex items-center justify-end gap-2">
                     <IconButton

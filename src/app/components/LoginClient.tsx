@@ -39,67 +39,67 @@ export default function LoginClient() {
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-slate-950">
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute -left-20 top-0 h-80 w-80 rounded-full bg-cyan-400/30 blur-3xl" />
-        <div className="absolute right-0 top-10 h-[28rem] w-[28rem] rounded-full bg-blue-500/25 blur-3xl" />
-        <div className="absolute bottom-0 left-1/3 h-[24rem] w-[24rem] rounded-full bg-sky-400/20 blur-3xl" />
+    <div className="relative min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+      <div className="pointer-events-none absolute inset-0 opacity-30">
+        <div className="absolute -left-20 top-0 h-96 w-96 rounded-full bg-sky-500/20 blur-3xl" />
+        <div className="absolute right-0 top-10 h-80 w-80 rounded-full bg-indigo-500/20 blur-3xl" />
+        <div className="absolute bottom-0 left-1/3 h-64 w-64 rounded-full bg-cyan-500/20 blur-3xl" />
       </div>
 
       <main className="relative mx-auto flex min-h-screen w-full max-w-7xl items-center px-6 py-12">
         <div className="grid w-full gap-8 lg:grid-cols-[1.2fr_0.8fr]">
-          <section className="rounded-3xl border border-white/10 bg-white/[0.06] p-8 text-white shadow-[0_30px_80px_rgba(2,6,23,0.55)] backdrop-blur-xl md:p-10">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-200/90">Voho Tracker</p>
-            <h1 className="mt-4 max-w-2xl text-3xl font-semibold leading-tight text-white md:text-5xl">
+          <section className="rounded-2xl border border-white/10 bg-white/5 p-8 text-white shadow-2xl backdrop-blur-xl md:p-10">
+            <p className="text-xs font-bold uppercase tracking-widest text-sky-400">Voho Tracker</p>
+            <h1 className="mt-4 max-w-2xl text-4xl font-bold leading-tight text-white md:text-5xl">
               Time tracking that feels as polished as your product.
             </h1>
-            <p className="mt-4 max-w-xl text-sm text-slate-200/90 md:text-base">
+            <p className="mt-4 max-w-xl text-base text-slate-300">
               Unified tracking, project visibility, and performance insights for modern teams.
             </p>
 
             <div className="mt-8 grid gap-4 sm:grid-cols-3">
-              <div className="rounded-2xl border border-white/10 bg-white/[0.07] p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-cyan-100/80">Realtime</p>
-                <p className="mt-2 text-lg font-semibold">Live timer sync</p>
+              <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wider text-sky-300">Realtime</p>
+                <p className="mt-2 text-lg font-bold">Live timer sync</p>
               </div>
-              <div className="rounded-2xl border border-white/10 bg-white/[0.07] p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-cyan-100/80">Reporting</p>
-                <p className="mt-2 text-lg font-semibold">Actionable dashboards</p>
+              <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wider text-sky-300">Reporting</p>
+                <p className="mt-2 text-lg font-bold">Actionable dashboards</p>
               </div>
-              <div className="rounded-2xl border border-white/10 bg-white/[0.07] p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-cyan-100/80">Operations</p>
-                <p className="mt-2 text-lg font-semibold">DB-first reliability</p>
+              <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wider text-sky-300">Operations</p>
+                <p className="mt-2 text-lg font-bold">DB-first reliability</p>
               </div>
             </div>
           </section>
 
-          <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_24px_70px_rgba(15,23,42,0.22)] md:p-8">
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-sky-700">Welcome back</p>
-            <h2 className="mt-2 text-3xl font-semibold text-slate-900">Sign in</h2>
-            <p className="mt-1 text-sm text-slate-600">Use your team account credentials to continue.</p>
+          <section className="rounded-2xl border border-slate-200/50 bg-white/95 p-8 shadow-2xl backdrop-blur-xl md:p-10">
+            <p className="text-xs font-bold uppercase tracking-widest text-sky-600">Welcome back</p>
+            <h2 className="mt-2 text-3xl font-bold text-slate-800">Sign in</h2>
+            <p className="mt-1 text-sm text-slate-500">Use your team account credentials to continue.</p>
 
             <div className="mt-6 space-y-4">
               <label className="block">
-                <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Email</span>
+                <span className="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-500">Email</span>
                 <input
                   type="email"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   onKeyDown={onEnter}
                   placeholder="you@company.com"
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-[#0BA5E9] focus:ring-2 focus:ring-sky-100"
+                  className="input"
                 />
               </label>
 
               <label className="block">
-                <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Password</span>
+                <span className="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-500">Password</span>
                 <input
                   type="password"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   onKeyDown={onEnter}
                   placeholder="••••••••"
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-[#0BA5E9] focus:ring-2 focus:ring-sky-100"
+                  className="input"
                 />
               </label>
 

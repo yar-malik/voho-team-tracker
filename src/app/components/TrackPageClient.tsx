@@ -734,22 +734,22 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="border-b border-slate-200 px-5 py-3">
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="border-b border-slate-200 px-6 py-4 bg-slate-50/50">
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
             onClick={() => {
               setDate(shiftDateInput(date, -1));
             }}
-            className="rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-700"
+            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-white hover:border-slate-300 hover:text-slate-800 transition-all"
           >
             ←
           </button>
           <button
             type="button"
             onClick={() => setDate(formatLocalDateInput(new Date()))}
-            className="rounded-md border border-slate-300 bg-slate-50 px-3 py-1 text-sm text-slate-700"
+            className="rounded-lg bg-sky-600 text-white px-4 py-1.5 text-sm font-medium hover:bg-sky-700 transition-colors shadow-sm"
           >
             Today
           </button>
@@ -758,7 +758,7 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
             onClick={() => {
               setDate(shiftDateInput(date, 1));
             }}
-            className="rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-700"
+            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-white hover:border-slate-300 hover:text-slate-800 transition-all"
           >
             →
           </button>
@@ -767,7 +767,7 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
             type="date"
             value={date}
             onChange={(event) => setDate(event.target.value)}
-            className="rounded-md border border-slate-300 px-2 py-1 text-sm"
+            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-600 bg-white hover:border-slate-300 transition-all"
           />
 
           <div className="ml-1 flex gap-1">
@@ -786,13 +786,13 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
             ))}
           </div>
 
-          <p className="ml-auto text-sm font-semibold text-slate-700">WEEK TOTAL {formatDurationShort(weekTotalSeconds)}</p>
+          <p className="ml-auto text-sm font-semibold text-slate-700 bg-slate-100 px-3 py-1 rounded-lg">WEEK TOTAL {formatDurationShort(weekTotalSeconds)}</p>
         </div>
         {entries?.warning && <p className="mt-2 text-xs text-amber-700">{entries.warning}</p>}
         {error && <p className="mt-2 text-xs text-rose-700">{error}</p>}
       </div>
 
-      <div className="border-b border-slate-200 bg-slate-50/40 px-5 py-4">
+      <div className="border-b border-slate-200 bg-slate-50 px-6 py-5">
         <div className="mb-2 flex items-center justify-between">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Total hours worked by team member</p>
           <p className="text-xs text-slate-500">{date}</p>
@@ -816,11 +816,11 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
                 );
               })}
             </div>
-            <div className="relative h-40 rounded-lg border border-slate-200 bg-white px-2 pt-2">
+            <div className="relative h-48 rounded-xl border border-slate-200 bg-white p-3">
               {[0, 1, 2, 3, 4].map((step) => (
                 <div
                   key={`daily-grid-${step}`}
-                  className="absolute left-0 right-0 border-t border-slate-200"
+                  className="absolute left-0 right-0 border-t border-slate-100"
                   style={{ top: `${step * 25}%` }}
                 />
               ))}
@@ -831,7 +831,7 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
                   return (
                     <div key={row.name} className="flex min-w-[56px] flex-1 flex-col items-center gap-1">
                       <div
-                        className="w-full rounded-t-md bg-gradient-to-t from-[#0284c7] via-[#0BA5E9] to-[#7dd3fc] shadow-[0_4px_10px_rgba(2,132,199,0.2)]"
+                        className="w-full rounded-t-lg bg-gradient-to-t from-sky-500 via-sky-400 to-sky-300 shadow-[0_4px_10px_rgba(2,132,199,0.2)]"
                         style={{ height: `${heightPercent}%` }}
                         title={`${row.name}: ${formatDurationShort(row.seconds)}`}
                       />
@@ -847,8 +847,8 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
       </div>
 
       <div className="min-h-[620px]">
-        <section className="relative border-r border-slate-200">
-          <div ref={calendarScrollRef} className="relative max-h-[72vh] overflow-auto">
+        <section className="relative border-r border-slate-200 bg-white rounded-r-xl shadow-inner">
+          <div ref={calendarScrollRef} className="relative max-h-[70vh] overflow-auto scrollbar-thin">
             <div
               className="relative min-w-[820px]"
               style={{ height: `${24 * hourHeight}px` }}
@@ -857,12 +857,12 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
                 void createEntryAtPoint(event.clientY, event.currentTarget);
               }}
             >
-              <div className="absolute left-2 top-2 z-30 flex items-center gap-1 rounded-lg border border-slate-200 bg-white/95 p-1 shadow-sm">
+              <div className="absolute left-3 top-3 z-30 flex items-center gap-2 rounded-xl border border-slate-200 bg-white/95 p-2 shadow-lg">
                 <button
                   type="button"
                   onClick={() => setZoomLevel((value) => Math.max(0, value - 1))}
                   disabled={zoomLevel === 0}
-                  className="h-7 w-7 rounded-md border border-slate-200 text-lg leading-none text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="h-8 w-8 rounded-lg border border-slate-200 text-lg leading-none text-slate-600 hover:bg-sky-50 hover:border-sky-300 hover:text-sky-600 disabled:cursor-not-allowed disabled:opacity-40 transition-all"
                   title="Zoom out"
                 >
                   −
@@ -871,7 +871,7 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
                   type="button"
                   onClick={() => setZoomLevel((value) => Math.min(ZOOM_LEVELS.length - 1, value + 1))}
                   disabled={zoomLevel === ZOOM_LEVELS.length - 1}
-                  className="h-7 w-7 rounded-md border border-slate-200 text-lg leading-none text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="h-8 w-8 rounded-lg border border-slate-200 text-lg leading-none text-slate-600 hover:bg-sky-50 hover:border-sky-300 hover:text-sky-600 disabled:cursor-not-allowed disabled:opacity-40 transition-all"
                   title="Zoom in"
                 >
                   +
@@ -881,10 +881,10 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
               {hours.map((hour) => (
                 <div
                   key={hour}
-                  className="pointer-events-none absolute left-0 right-0 border-b border-slate-100"
+                  className="pointer-events-none absolute left-0 right-0 border-b border-slate-100/60"
                   style={{ top: `${hour * hourHeight}px`, height: `${hourHeight}px` }}
                 >
-                  <span className="absolute left-3 top-1 text-xs text-slate-500">{String(hour).padStart(2, "0")}:00</span>
+                  <span className="absolute left-5 top-3 text-xs font-semibold text-slate-400 tracking-wide">{String(hour).padStart(2, "0")}:00</span>
                 </div>
               ))}
 
@@ -956,9 +956,9 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
                       />
                     )}
 
-                    <p className="truncate font-semibold text-slate-900">{block.description}</p>
-                    <p className="truncate text-slate-700">{block.project}</p>
-                    <p className="text-[11px] text-slate-600">{block.timeRange}</p>
+                    <p className="truncate font-bold text-slate-800 text-sm">{block.description}</p>
+                    <p className="truncate text-slate-600 text-xs">{block.project}</p>
+                    <p className="text-xs text-slate-500 font-medium">{block.timeRange}</p>
 
                     {!block.isRunning && (
                       <button
@@ -987,7 +987,7 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
               })}
 
               {nowMarkerTop !== null && (
-                <div className="pointer-events-none absolute left-24 right-0 border-t-2 border-sky-500" style={{ top: `${nowMarkerTop}px` }} />
+                <div className="pointer-events-none absolute left-24 right-0 border-t-2 border-sky-500 bg-sky-500/20" style={{ top: `${nowMarkerTop}px` }} />
               )}
             </div>
           </div>
@@ -996,11 +996,11 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
 
       {entryEditor && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in"
           onClick={() => setEntryEditor(null)}
         >
           <div
-            className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white p-4 shadow-2xl"
+            className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-6 shadow-xl"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center justify-between">
@@ -1008,7 +1008,7 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
                 <span className="inline-flex h-2 w-2 rounded-full bg-sky-500" />
                 Edit time entry
               </div>
-              <button type="button" onClick={() => setEntryEditor(null)} className="text-2xl leading-none text-slate-500">
+              <button type="button" onClick={() => setEntryEditor(null)} className="text-3xl leading-none text-slate-300 hover:text-slate-500 transition-colors font-light">
                 ×
               </button>
             </div>
@@ -1027,7 +1027,7 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
                   <button
                     type="button"
                     onClick={() => setModalProjectPickerOpen((open) => !open)}
-                    className="inline-flex min-w-[220px] items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-left text-base font-semibold text-sky-900 shadow-sm"
+                    className="btn-secondary justify-between min-w-[200px] text-base"
                   >
                     <svg viewBox="0 0 24 24" className="h-4 w-4 text-sky-700" fill="currentColor" aria-hidden="true">
                       <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5h3l1.5 1.5h8.5A2.5 2.5 0 0 1 21 9v9.5a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 18.5z" />
@@ -1040,9 +1040,9 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
                   </button>
 
                   {modalProjectPickerOpen && (
-                    <div className="absolute left-0 z-50 mt-2 w-[340px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_18px_48px_rgba(15,23,42,0.24)]">
+                    <div className="absolute left-0 z-50 mt-2 w-[340px] rounded-xl border border-slate-200 bg-white shadow-xl overflow-hidden">
                       <div className="border-b border-slate-100 p-3">
-                        <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                        <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
                           <svg viewBox="0 0 24 24" className="h-4 w-4 text-slate-500" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                             <circle cx="11" cy="11" r="7" />
                             <path d="m20 20-3.5-3.5" strokeLinecap="round" />
@@ -1104,7 +1104,7 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
                     onChange={(event) => setEntryEditor((prev) => (prev ? { ...prev, startTime: event.target.value } : prev))}
                     className="rounded-lg border border-slate-300 px-3 py-2 text-xl"
                   />
-                  <span className="text-2xl text-slate-400">→</span>
+                  <span className="text-2xl text-slate-300">→</span>
                   <input
                     type="time"
                     value={entryEditor.stopTime}
@@ -1173,7 +1173,7 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
                       }));
                     }
                   }}
-                  className="rounded-lg border border-sky-300 bg-sky-50 px-4 py-2.5 text-xl font-semibold text-sky-700 disabled:bg-slate-200 disabled:text-slate-500"
+                  className="px-5 py-3 rounded-xl border border-sky-200 bg-sky-50 text-sky-700 font-semibold hover:bg-sky-100 transition-colors disabled:opacity-50"
                   title="Start new timer now with this description and project"
                 >
                   ▶
@@ -1224,13 +1224,13 @@ export default function TrackPageClient({ memberName }: { memberName: string }) 
                       }));
                     }
                   }}
-                  className="ml-auto rounded-lg bg-[#0BA5E9] px-6 py-2.5 text-xl font-semibold text-white hover:bg-[#0994cf] disabled:bg-slate-300"
+                  className="ml-auto px-6 py-3 rounded-xl bg-sky-600 text-white font-semibold hover:bg-sky-700 transition-colors shadow-lg shadow-sky-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {entryEditor.saving ? "Saving..." : "Save"}
                 </button>
               </div>
 
-              {entryEditor.error && <p className="rounded bg-rose-50 px-3 py-2 text-sm text-rose-700">{entryEditor.error}</p>}
+              {entryEditor.error && <p className="bg-red-50 text-red-600 px-4 py-3 rounded-xl text-sm font-medium">{entryEditor.error}</p>}
             </div>
           </div>
         </div>

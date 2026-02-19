@@ -124,6 +124,39 @@ function setFaviconFromTimerState(isRunning: boolean) {
   }
 }
 
+function sendBrowserNotification(title: string, body?: string) {
+  if (typeof window === "undefined" || !("Notification" in window)) {
+    console.log("[Notification] Not supported");
+    return;
+  }
+  console.log("[Notification] Permission:", Notification.permission);
+  if (Notification.permission !== "granted") {
+    console.log("[Notification] Permission not granted");
+    return;
+  }
+  
+  try {
+    console.log("[Notification] Creating:", title, body);
+    const notification = new Notification(title, {
+      body,
+      tag: "voho-timer",
+      requireInteraction: false,
+    });
+    notification.onshow = () => console.log("[Notification] Shown");
+    notification.onerror = (e) => console.error("[Notification] Error:", e);
+    setTimeout(() => notification.close(), 5000);
+  } catch (e) {
+    console.error("[Notification] Failed:", e);
+  }
+}
+
+function requestNotificationPermission(): void {
+  if (typeof window === "undefined" || !("Notification" in window)) return;
+  if (Notification.permission === "granted" || Notification.permission === "denied") return;
+  
+  Notification.requestPermission();
+}
+
 export default function GlobalTimerBar({ memberName }: { memberName: string | null }) {
   const [current, setCurrent] = useState<RunningTimer | null>(null);
   const [projects, setProjects] = useState<ProjectItem[]>([]);
@@ -270,6 +303,20 @@ export default function GlobalTimerBar({ memberName }: { memberName: string | nu
     window.addEventListener("pagehide", flushOnLeave);
     return () => window.removeEventListener("pagehide", flushOnLeave);
   }, [current, memberName, persistRunningDraft]);
+
+  // Listen for auto-stop notifications
+  useEffect(() => {
+    const handleAutoStopped = (event: Event) => {
+      const custom = event as CustomEvent<{ count: number; memberName?: string }>;
+      const { count } = custom.detail;
+      sendBrowserNotification(
+        "Timer Auto-Stopped",
+        `${count} timer${count > 1 ? 's' : ''} stopped after 2 hours limit`
+      );
+    };
+    window.addEventListener("voho-auto-stopped", handleAutoStopped);
+    return () => window.removeEventListener("voho-auto-stopped", handleAutoStopped);
+  }, []);
 
   useEffect(() => {
     return () => saveControllerRef.current?.abort();
@@ -684,6 +731,12 @@ export default function GlobalTimerBar({ memberName }: { memberName: string | nu
                     })
                   );
                 } else {
+                  requestNotificationPermission();
+                  const duration = previous ? Math.floor((Date.now() - new Date(previous.startAt).getTime()) / 1000) : 0;
+                  const hours = Math.floor(duration / 3600);
+                  const minutes = Math.floor((duration % 3600) / 60);
+                  const durationText = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+                  sendBrowserNotification("Timer Stopped", `Tracked ${durationText} on ${previousProjectName || "No project"}`);
                   window.dispatchEvent(new CustomEvent("voho-entries-changed", { detail: { memberName } }));
                 }
               } finally {
@@ -756,6 +809,8 @@ export default function GlobalTimerBar({ memberName }: { memberName: string | nu
                     },
                   })
                 );
+                requestNotificationPermission();
+                sendBrowserNotification("Timer Started", `Tracking: ${projectName || "No project"}`);
                 window.dispatchEvent(new CustomEvent("voho-entries-changed", { detail: { memberName } }));
               } else {
                 setCurrent(null);

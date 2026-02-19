@@ -19,15 +19,15 @@ import { getRealtimeClient } from "@/lib/realtimeClient";
 type IconProps = { className?: string };
 
 function navClass(active: boolean) {
-  return `block w-full rounded-xl px-3 py-2.5 text-left text-sm font-medium transition ${
+  return `block w-full rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-all duration-200 ${
     active
-      ? "border border-sky-200 bg-sky-100 text-sky-900 shadow-sm"
-      : "border border-transparent text-slate-700 hover:border-sky-100 hover:bg-sky-50"
+      ? "bg-sky-50 text-sky-700 border-l-4 border-sky-600"
+      : "text-slate-600 hover:bg-slate-100 hover:text-slate-800 border-l-4 border-transparent"
   }`;
 }
 
-function iconClass() {
-  return "h-4 w-4 shrink-0 text-slate-500";
+function iconClass(active: boolean) {
+  return `h-5 w-5 shrink-0 ${active ? "text-sky-600" : "text-slate-400"}`;
 }
 
 function ClockIcon({ className }: IconProps) {
@@ -435,131 +435,104 @@ export default function PlatformShell({
   }, [isRunning, runningLabel, currentTaskLabel]);
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#f7fcff_0%,#f8fbff_100%)]">
-      <div className="mx-auto flex w-full max-w-[1700px] gap-4 px-4 py-4 md:px-6">
-        <aside className="sticky top-4 hidden h-[calc(100vh-2rem)] w-[280px] shrink-0 rounded-3xl border border-slate-200 bg-white/90 p-4 shadow-[0_20px_40px_rgba(15,23,42,0.08)] backdrop-blur lg:flex lg:flex-col">
-          <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-sky-50 to-cyan-50 p-3 shadow-sm">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Voho Tracker</p>
-            <p className="mt-1 truncate text-sm font-medium text-slate-700">{currentMemberName ?? currentUserEmail ?? "Signed in"}</p>
-          </div>
-
-          <nav className="mt-5 flex-1 space-y-4">
-            <div>
-              <p className="px-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Track</p>
-              <div className="mt-2 space-y-1.5">
-                <Link href="/track" prefetch className={navClass(isActive(pathname, "/track"))}>
-                  {isRunning ? (
-                    <span className="inline-flex items-center gap-2">
-                      <span className="relative inline-flex h-2.5 w-2.5">
-                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-75" />
-                        <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-sky-500" />
-                      </span>
-                      <ClockIcon className={iconClass()} />
-                      <span className="tabular-nums">{runningLabel}</span>
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-2">
-                      <ClockIcon className={iconClass()} />
-                      <span>Tracking</span>
-                    </span>
-                  )}
-                </Link>
-              </div>
+    <div className="min-h-screen bg-slate-50">
+      <div className="mx-auto flex w-full max-w-[1800px] gap-6 px-6 py-5">
+        {/* Sidebar */}
+        <aside className="sticky top-5 hidden h-[calc(100vh-2.5rem)] w-64 shrink-0 lg:flex lg:flex-col">
+          <div className="flex h-full flex-col rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
+            {/* Logo Area */}
+            <div className="bg-gradient-to-r from-sky-600 to-sky-700 px-5 py-6">
+              <p className="text-xs font-bold uppercase tracking-widest text-sky-100">Voho Tracker</p>
+              <p className="mt-2 truncate text-lg font-semibold text-white">{currentMemberName ?? currentUserEmail ?? "Signed in"}</p>
             </div>
 
-            <div>
-              <p className="px-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Manage</p>
-              <div className="mt-2 space-y-1.5">
-                <Link href="/projects" prefetch className={navClass(isActive(pathname, "/projects"))}>
-                  <span className="inline-flex items-center gap-2">
-                    <ProjectsIcon className={iconClass()} />
-                    <span>Projects</span>
-                  </span>
-                </Link>
-                <Link
-                  href="/members"
-                  prefetch
-                  className={navClass(isActive(pathname, "/members") || isActive(pathname, "/member"))}
-                >
-                  <span className="inline-flex items-center gap-2">
-                    <MembersIcon className={iconClass()} />
-                    <span>Members</span>
-                  </span>
-                </Link>
-                <Link href="/kpis" prefetch className={navClass(isActive(pathname, "/kpis"))}>
-                  <span className="inline-flex items-center gap-2">
-                    <KpiIcon className={iconClass()} />
-                    <span>KPIs</span>
-                  </span>
-                </Link>
-                <div
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => router.push("/pomodoro")}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      router.push("/pomodoro");
-                    }
-                  }}
-                  className={`flex items-center justify-between rounded-lg border px-3 py-2 text-xs ${
-                    isActive(pathname, "/pomodoro")
-                      ? "border-sky-300 bg-sky-100 text-sky-900"
-                      : "border-sky-200 bg-sky-50 text-slate-700"
-                  }`}
-                >
-                  <span className="inline-flex items-center gap-2 font-medium tabular-nums">
-                    <PomodoroIcon className={iconClass()} />
-                    <span>Pomodoro {formatPomodoroTimer(pomodoroState.secondsLeft)}</span>
-                  </span>
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      setPomodoroState((prev) => {
-                        const next = prev.running ? pausePomodoro(prev) : startPomodoro(prev);
-                        writePomodoroState(next, "platform-shell");
-                        return next;
-                      });
-                    }}
-                    aria-label={pomodoroState.running ? "Stop pomodoro timer" : "Start pomodoro timer"}
-                    className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#0BA5E9] text-white hover:bg-[#0994cf]"
-                  >
-                    {pomodoroState.running ? (
-                      <span className="h-2.5 w-2.5 rounded-sm bg-white" />
+            {/* Navigation */}
+            <nav className="flex-1 overflow-y-auto p-3 space-y-6">
+              <div>
+                <p className="px-3 text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Time</p>
+                <div className="space-y-1">
+                  <Link href="/track" prefetch className={navClass(isActive(pathname, "/track"))}>
+                    {isRunning ? (
+                      <span className="inline-flex items-center gap-3">
+                        <span className="relative flex h-3 w-3">
+                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                          <span className="relative inline-flex h-3 w-3 rounded-full bg-emerald-500" />
+                        </span>
+                        <ClockIcon className={iconClass(isActive(pathname, "/track"))} />
+                        <span className="tabular-nums font-mono text-emerald-600">{runningLabel}</span>
+                      </span>
                     ) : (
-                      <span className="ml-[1px] h-0 w-0 border-y-[5px] border-y-transparent border-l-[7px] border-l-white" />
+                      <span className="inline-flex items-center gap-3">
+                        <ClockIcon className={iconClass(isActive(pathname, "/track"))} />
+                        <span>Time Tracking</span>
+                      </span>
                     )}
-                  </button>
+                  </Link>
                 </div>
               </div>
+
+              <div>
+                <p className="px-3 text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Tools</p>
+                <div className="space-y-1">
+                  <Link href="/pomodoro" prefetch className={navClass(isActive(pathname, "/pomodoro"))}>
+                    <span className="inline-flex items-center gap-3">
+                      <PomodoroIcon className={iconClass(isActive(pathname, "/pomodoro"))} />
+                      <span>Pomodoro</span>
+                    </span>
+                  </Link>
+                  <Link href="/projects" prefetch className={navClass(isActive(pathname, "/projects"))}>
+                    <span className="inline-flex items-center gap-3">
+                      <ProjectsIcon className={iconClass(isActive(pathname, "/projects"))} />
+                      <span>Projects</span>
+                    </span>
+                  </Link>
+                  <Link
+                    href="/members"
+                    prefetch
+                    className={navClass(isActive(pathname, "/members") || isActive(pathname, "/member"))}
+                  >
+                    <span className="inline-flex items-center gap-3">
+                      <MembersIcon className={iconClass(isActive(pathname, "/members") || isActive(pathname, "/member"))} />
+                      <span>Members</span>
+                    </span>
+                  </Link>
+                  <Link href="/kpis" prefetch className={navClass(isActive(pathname, "/kpis"))}>
+                    <span className="inline-flex items-center gap-3">
+                      <KpiIcon className={iconClass(isActive(pathname, "/kpis"))} />
+                      <span>KPIs</span>
+                    </span>
+                  </Link>
+                </div>
+              </div>
+            </nav>
+
+            {/* Footer */}
+            <div className="border-t border-slate-200 p-3 space-y-2">
+              <Link href="/settings" prefetch className={navClass(isActive(pathname, "/settings"))}>
+                <span className="inline-flex items-center gap-3">
+                  <SettingsIcon className={iconClass(isActive(pathname, "/settings"))} />
+                  <span>Settings</span>
+                </span>
+              </Link>
+              
+              <button
+                type="button"
+                onClick={async () => {
+                  await fetch("/api/auth/logout", { method: "POST" });
+                  window.location.href = "/login";
+                }}
+                className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                <span>Sign out</span>
+              </button>
             </div>
-          </nav>
-
-          <Link href="/settings" prefetch className={navClass(isActive(pathname, "/settings"))}>
-            <span className="inline-flex items-center gap-2">
-              <SettingsIcon className={iconClass()} />
-              <span>Settings</span>
-            </span>
-          </Link>
-
-          <div className="mt-4 rounded-xl border border-slate-200 bg-sky-50 p-3 text-xs text-slate-600">
-            <p className="font-semibold text-slate-700">Tip</p>
-            <p className="mt-1">Use Tracking daily and keep entries clean with project tags.</p>
           </div>
-
-          <button
-            type="button"
-            onClick={async () => {
-              await fetch("/api/auth/logout", { method: "POST" });
-              window.location.href = "/login";
-            }}
-            className="mt-3 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-          >
-            Sign out
-          </button>
         </aside>
 
+        {/* Main Content */}
         <main className="min-w-0 flex-1">
           <GlobalTimerBar memberName={currentMemberName} />
           {children}

@@ -263,6 +263,7 @@ function buildTimelineBlocks(entries: TimeEntry[], dateInput: string, nowMs = Da
   const dayHeightPx = HOURS_IN_DAY * HOUR_HEIGHT;
   const sorted = [...entries].sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
   const blocks: TimelineBlock[] = [];
+  const seenIds = new Map<string, number>();
 
   for (const entry of sorted) {
     const startMs = new Date(entry.start).getTime();
@@ -278,8 +279,13 @@ function buildTimelineBlocks(entries: TimeEntry[], dateInput: string, nowMs = Da
     const topPx = Math.max(0, Math.min(dayHeightPx - MIN_BLOCK_HEIGHT, idealTopPx));
     const heightPx = Math.max(MIN_BLOCK_HEIGHT, Math.min(rawHeightPx, dayHeightPx - topPx));
 
+    const baseId = `${entry.id}-${startMs}`;
+    const count = seenIds.get(baseId) ?? 0;
+    seenIds.set(baseId, count + 1);
+    const uniqueId = count > 0 ? `${baseId}-dup${count}` : baseId;
+
     blocks.push({
-      id: `${entry.id}-${startMs}`,
+      id: uniqueId,
       lane: 0,
       topPx,
       heightPx,
@@ -719,6 +725,17 @@ export default function TimeDashboard({
       })
       .then((payload) => {
         if (!active) return;
+        
+        // Check for auto-stop warning and send notification
+        const warning = (payload as EntriesResponse | TeamResponse).warning;
+        if (warning && warning.includes("auto-stopped")) {
+          const match = warning.match(/(\d+)\s+running/);
+          const count = match ? parseInt(match[1], 10) : 1;
+          window.dispatchEvent(new CustomEvent("voho-auto-stopped", { 
+            detail: { count, memberName: mode === "member" ? member : undefined }
+          }));
+        }
+        
         if (mode === "team" || mode === "all") {
           setTeamData(payload as TeamResponse);
           setData(null);
@@ -1728,7 +1745,7 @@ export default function TimeDashboard({
         ) : (
           <p className="text-sm font-semibold text-slate-700">Your calendar dashboard</p>
         )}
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-slate-400">
           Last updated: {lastUpdateMeta ? `${formatDateTime(lastUpdateMeta.at)} (DB snapshot)` : "—"}
         </p>
       </div>
@@ -1895,7 +1912,7 @@ export default function TimeDashboard({
                   );
                 })}
               </div>
-              <span className="text-xs text-slate-500">
+              <span className="text-xs text-slate-400">
                 {rankingView === "daily"
                   ? date
                   : rankingView === "weekly"
@@ -1912,14 +1929,14 @@ export default function TimeDashboard({
               <div className="mt-3">
                 <div className="mb-2 flex items-center justify-between">
                   <span className="text-sm font-medium text-slate-700">{selectedAnomalyMember} — Last 7 days breakdown</span>
-                  <span className="text-xs text-slate-500">
+                  <span className="text-xs text-slate-400">
                     {teamWeekData ? `${teamWeekData.startDate} → ${teamWeekData.endDate}` : "Last 7 days"}
                   </span>
                 </div>
                 {(() => {
                   const memberData = teamWeekData?.members.find((m) => m.name === selectedAnomalyMember);
                   if (!memberData || !teamWeekData) {
-                    return <p className="text-sm text-slate-500">No weekly data available.</p>;
+                    return <p className="text-sm text-slate-400">No weekly data available.</p>;
                   }
                   const days = teamWeekData.weekDates.map((date) => ({
                     date,
@@ -1955,7 +1972,7 @@ export default function TimeDashboard({
                             return (
                               <div key={day.date} className="flex h-full min-w-[56px] flex-1 flex-col items-center justify-end gap-1">
                                 <div
-                                  className="w-full rounded-t-md bg-gradient-to-t from-sky-600 to-cyan-400 transition-all duration-200 hover:from-sky-500 hover:to-cyan-300"
+                                  className="w-full rounded-t-lg bg-gradient-to-t from-sky-500 to-sky-400 transition-all duration-200 hover:from-sky-600 hover:to-sky-500"
                                   style={{ height: `${heightPercent}%` }}
                                   title={`${formatShortDateLabel(day.date)}: ${formatDuration(day.seconds)}`}
                                   onMouseEnter={(event) => placeHoverTooltip(event, `${formatShortDateLabel(day.date)}\n${formatDuration(day.seconds)}`)}
@@ -2062,7 +2079,7 @@ export default function TimeDashboard({
           </h2>
           <div className="mt-3 flex flex-wrap gap-2">
             {savedFilters.length === 0 && (
-              <span className="text-sm text-slate-500">No saved filters yet.</span>
+              <span className="text-sm text-slate-400">No saved filters yet.</span>
             )}
             {savedFilters.map((item) => (
               <div key={item.id} className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1">
@@ -2127,13 +2144,13 @@ export default function TimeDashboard({
 
           <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-slate-900">Day view</h2>
+            <h2 className="text-lg font-bold text-slate-800">Day view</h2>
             <p className="mt-1 text-sm text-slate-500">
               Entries are ordered from start of day to end of day.
             </p>
             <div className="mt-4">
               {data.entries.length === 0 && (
-                <p className="text-sm text-slate-500">No entries for this day.</p>
+                <p className="text-sm text-slate-400">No entries for this day.</p>
               )}
               {data.entries.length > 0 && (
                 <div ref={dayCalendarScrollRef} className="max-h-[72vh] overflow-auto">
@@ -2308,7 +2325,7 @@ export default function TimeDashboard({
               </h3>
               <div className="mt-3 space-y-2">
                 {summary.length === 0 && (
-                  <p className="text-sm text-slate-500">No summary data yet.</p>
+                  <p className="text-sm text-slate-400">No summary data yet.</p>
                 )}
                 {summary.map((item) => (
                   <div key={item.label} className="flex items-center justify-between">
@@ -2338,8 +2355,8 @@ export default function TimeDashboard({
         <div className="space-y-4">
           {mode === "all" && (
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h2 className="text-lg font-semibold text-slate-900">Member task cards</h2>
-              <p className="text-sm text-slate-500">
+              <h2 className="text-lg font-bold text-slate-800">Member task cards</h2>
+              <p className="text-sm text-slate-400">
                 Compact per-member task split for the selected day.
               </p>
               <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -2380,7 +2397,7 @@ export default function TimeDashboard({
                               {memberData.name}
                             </Link>
                           </h3>
-                          <p className="text-sm text-slate-500">Total {formatDuration(cardTotalSeconds)}</p>
+                          <p className="text-sm text-slate-400">Total {formatDuration(cardTotalSeconds)}</p>
                         </div>
                         <div className="flex flex-col items-end gap-1">
                           <span
@@ -2403,12 +2420,12 @@ export default function TimeDashboard({
                             Now: {running.description?.trim() || "(No description)"} | Project: {running.project_name?.trim() || "No project"}
                           </p>
                         ) : (
-                          <p className="text-xs text-slate-500">Now: no active timer</p>
+                          <p className="text-xs text-slate-400">Now: no active timer</p>
                         )}
                       </div>
                       <div className="mt-3 space-y-2">
                         {memberSummary.length === 0 && (
-                          <p className="text-sm text-slate-500">No entries yet.</p>
+                          <p className="text-sm text-slate-400">No entries yet.</p>
                         )}
                         {memberSummary.map((item) => {
                           const widthPercent =
@@ -2446,7 +2463,7 @@ export default function TimeDashboard({
 
           {mode === "team" && teamWeekData && (
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-slate-400">
                 Ranking by total worked time over the last seven days (from stored DB rollups).
               </p>
               {(teamWeekData.warning || teamWeekData.stale) && (
@@ -2476,7 +2493,7 @@ export default function TimeDashboard({
                         return selectedMembersLower.has(row.name.trim().toLowerCase());
                       })
                       .map((row, index) => (
-                      <tr key={row.name} className="border-b border-slate-100">
+                      <tr key={row.name} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
                         <td className="px-2 py-2 font-semibold text-slate-900">{index + 1}</td>
                         <td className="px-2 py-2 text-slate-800">
                           <Link href={getMemberPageHref(row.name, date)} className={MEMBER_LINK_CLASS}>
@@ -2769,7 +2786,7 @@ export default function TimeDashboard({
                       </tr>
                     )}
                     {visibleTeamEntries.map(({ memberName, entry }) => (
-                      <tr key={`${memberName}-${entry.id}-${entry.start}`} className="border-b border-slate-100">
+                      <tr key={`${memberName}-${entry.id}-${entry.start}`} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
                         <td className="px-3 py-2 text-slate-800">{memberName}</td>
                         <td className="px-3 py-2 text-slate-800">{entry.description?.trim() || "(No description)"}</td>
                         <td className="px-3 py-2 text-slate-700">{entry.project_name?.trim() || "No project"}</td>
@@ -2802,7 +2819,7 @@ export default function TimeDashboard({
                       </tr>
                     )}
                     {visibleTeamTotals.map((row) => (
-                      <tr key={row.memberName} className="border-b border-slate-100">
+                      <tr key={row.memberName} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
                         <td className="px-3 py-2 text-slate-800">{row.memberName}</td>
                         <td className="px-3 py-2 text-slate-700">{row.entries}</td>
                         <td className="px-3 py-2 font-semibold text-slate-900">{formatDuration(row.seconds)}</td>
